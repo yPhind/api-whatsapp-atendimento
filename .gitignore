@@ -1,0 +1,11 @@
+# Segredos e configurações locais
+.env
+.env.*
+!.env.example
+
+# Dependências
+node_modules/
+
+# Arquivos operacionais e anexos de clientes
+storage/*
+!storage/.gitkeep
