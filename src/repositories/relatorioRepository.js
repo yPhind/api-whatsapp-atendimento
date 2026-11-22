@@ -41,7 +41,6 @@ async function anexarDadosClientes(registros) {
   });
 }
 
-
 async function listarLogs(filtros = {}) {
   const condicoes = [];
   const parametros = [];
@@ -76,7 +75,6 @@ async function listarLogs(filtros = {}) {
     ? `WHERE ${condicoes.join(" AND ")}`
     : "";
 
-  // 1. Busca os registros no banco de logs
   const resultado = await logs.query(
     `
       SELECT
@@ -101,159 +99,70 @@ async function listarLogs(filtros = {}) {
   const registros = resultado.rows;
 
   if (!registros.length) {
-    return [];
+    return registros;
   }
 
-  // 2. Identifica os atendimentos e usuários dos registros
-  const atendimentoIds = [
+  const usuariosSistemaIds = [
     ...new Set(
       registros
-        .map(r => r.atendimento_id)
+        .map(registro => registro.usuario_sistema_id)
         .filter(id => id != null)
         .map(String)
     )
   ];
 
-  const usuarioSistemaIds = [
+  const usuariosClienteIds = [
     ...new Set(
       registros
-        .map(r => r.usuario_sistema_id)
+        .map(registro => registro.contexto?.usuario_cliente_id)
         .filter(id => id != null)
         .map(String)
     )
   ];
 
-  // 3. Consulta os atendimentos e os responsáveis
-  const [atendimentos, usuariosSistema] = await Promise.all([
-    atendimentoIds.length
+  const [usuariosSistema, usuariosClientes] = await Promise.all([
+    usuariosSistemaIds.length
       ? atendimento.query(
-          `
-            SELECT id, protocolo, usuario_id, empresa_id
-            FROM wb_atendimentos
-            WHERE id = ANY($1::bigint[])
-          `,
-          [atendimentoIds]
+          `SELECT id, nome
+             FROM wb_usuarios_sistema
+            WHERE id = ANY($1::bigint[])`,
+          [usuariosSistemaIds]
         )
       : Promise.resolve({ rows: [] }),
 
-    usuarioSistemaIds.length
-      ? atendimento.query(
-          `
-            SELECT id, nome
-            FROM wb_usuarios_sistema
-            WHERE id = ANY($1::bigint[])
-          `,
-          [usuarioSistemaIds]
+    usuariosClienteIds.length
+      ? clientes.query(
+          `SELECT id, nome
+             FROM wb_usuarios
+            WHERE id = ANY($1::bigint[])`,
+          [usuariosClienteIds]
         )
       : Promise.resolve({ rows: [] })
   ]);
 
-  const mapaAtendimentos = new Map(
-    atendimentos.rows.map(a => [String(a.id), a])
-  );
-
   const mapaUsuariosSistema = new Map(
-    usuariosSistema.rows.map(u => [String(u.id), u])
+    usuariosSistema.rows.map(usuario => [
+      String(usuario.id),
+      usuario.nome
+    ])
   );
 
-  // 4. Recupera os dados dos clientes e empresas
-  const usuarioClienteIds = new Set();
-  const empresaIds = new Set();
-
-  for (const registro of registros) {
-    const atendimentoRegistro = mapaAtendimentos.get(
-      String(registro.atendimento_id)
-    );
-
-    const contexto = registro.contexto || {};
-
-    const usuarioId =
-      atendimentoRegistro?.usuario_id ??
-      contexto.usuario_cliente_id;
-
-    const empresaId =
-      atendimentoRegistro?.empresa_id ??
-      contexto.empresa_id;
-
-    if (usuarioId != null) {
-      usuarioClienteIds.add(String(usuarioId));
-    }
-
-    if (empresaId != null) {
-      empresaIds.add(String(empresaId));
-    }
-  }
-
-  const [clientesEncontrados, empresasEncontradas] =
-    await Promise.all([
-      usuarioClienteIds.size
-        ? clientes.query(
-            `
-              SELECT id, nome, telefone
-              FROM wb_usuarios
-              WHERE id = ANY($1::bigint[])
-            `,
-            [[...usuarioClienteIds]]
-          )
-        : Promise.resolve({ rows: [] }),
-
-      empresaIds.size
-        ? clientes.query(
-            `
-              SELECT id, cnpj
-              FROM wb_empresas
-              WHERE id = ANY($1::bigint[])
-            `,
-            [[...empresaIds]]
-          )
-        : Promise.resolve({ rows: [] })
-    ]);
-
-  const mapaClientes = new Map(
-    clientesEncontrados.rows.map(c => [String(c.id), c])
+  const mapaUsuariosClientes = new Map(
+    usuariosClientes.rows.map(usuario => [
+      String(usuario.id),
+      usuario.nome
+    ])
   );
 
-  const mapaEmpresas = new Map(
-    empresasEncontradas.rows.map(e => [String(e.id), e])
-  );
-
-  // 5. Entrega os registros enriquecidos ao painel
-  return registros.map(registro => {
-    const atendimentoRegistro = mapaAtendimentos.get(
-      String(registro.atendimento_id)
-    );
-
-    const contexto = registro.contexto || {};
-
-    const usuarioId =
-      atendimentoRegistro?.usuario_id ??
-      contexto.usuario_cliente_id;
-
-    const empresaId =
-      atendimentoRegistro?.empresa_id ??
-      contexto.empresa_id;
-
-    const cliente = usuarioId != null
-      ? mapaClientes.get(String(usuarioId))
-      : null;
-
-    const empresa = empresaId != null
-      ? mapaEmpresas.get(String(empresaId))
-      : null;
-
-    const usuarioSistema = registro.usuario_sistema_id != null
-      ? mapaUsuariosSistema.get(String(registro.usuario_sistema_id))
-      : null;
-
-    return {
-      ...registro,
-      protocolo: atendimentoRegistro?.protocolo ?? null,
-      cliente_nome: cliente?.nome ?? null,
-      cliente_telefone: cliente?.telefone ?? null,
-      empresa_cnpj: empresa?.cnpj ?? null,
-      usuario_sistema_nome: usuarioSistema?.nome ?? null
-    };
-  });
+  return registros.map(registro => ({
+    ...registro,
+    usuario_sistema_nome:
+      mapaUsuariosSistema.get(String(registro.usuario_sistema_id)) || null,
+    cliente_nome:
+      mapaUsuariosClientes.get(
+        String(registro.contexto?.usuario_cliente_id)
+      ) || null
+  }));
 }
 
 async function listarHistoricoAtendimentos(filtros = {}) {

@@ -6,7 +6,10 @@ const gerenciarSessoes = require("../realtime/gerenciarSessoes");
 async function criar(req, res, next) {
   try {
     const dados = usuarioSchema.parse(req.body);
-    const analista = await analistaService.criarAnalista(dados);
+    const analista = await analistaService.criarAnalista(
+      dados,
+      req.usuarioSistema.id
+    );
 
     res.status(201).json({
       mensagem: "Analista cadastrado com sucesso.",
@@ -70,7 +73,11 @@ async function atualizarSetor(req, res, next) {
       });
     }
 
-    const analista = await analistaService.atualizarSetor(id, setorId);
+    const analista = await analistaService.atualizarSetor(
+      id,
+      setorId,
+      req.usuarioSistema.id
+    );
     const io = req.app.get("io");
     await gerenciarSessoes.atualizarSetorUsuario(io, id, analista?.setor_id ?? setorId);
 
@@ -107,7 +114,11 @@ async function atualizarSituacao(req, res, next) {
       });
     }
 
-    const analista = await analistaService.atualizarSituacao(id, ativo);
+    const analista = await analistaService.atualizarSituacao(
+      id,
+      ativo,
+      req.usuarioSistema.id
+    );
     if (!ativo) {
       await gerenciarSessoes.desconectarUsuario(req.app.get("io"), id);
     }
@@ -140,8 +151,10 @@ async function redefinirSenha(req, res, next) {
     }
 
     const resultado =
-      await analistaService.redefinirSenhaPeloSupervisor(id);
-    // A redefinição de senha invalida as sessões Socket.IO já abertas.
+      await analistaService.redefinirSenhaPeloSupervisor(
+        id,
+        req.usuarioSistema.id
+      );
     await gerenciarSessoes.desconectarUsuario(req.app.get("io"), id);
 
     res.status(200).json({
@@ -173,11 +186,11 @@ async function redefinirSenha(req, res, next) {
     next(erro);
   }
 }
-  module.exports = {
-    criar,
-    listar,
-    listarSetores,
-    atualizarSituacao,
-    atualizarSetor,
-    redefinirSenha
-  };
+module.exports = {
+  criar,
+  listar,
+  listarSetores,
+  atualizarSituacao,
+  atualizarSetor,
+  redefinirSenha
+};

@@ -3,6 +3,48 @@ const fs = require("fs");
 const path = require("path");
 const repo = require("../repositories/tarefaRepository");
 
+function validar(dados = {}) {
+  const titulo = String(dados.titulo || "").trim();
+  const observacao = String(dados.observacao || "").trim();
+  const dataPrevista = dados.dataPrevista || null;
+
+  if (!titulo) {
+    throw new Error("TITULO_OBRIGATORIO");
+  }
+
+  if (titulo.length > 64) {
+    throw new Error("TITULO_MUITO_LONGO");
+  }
+
+  if (!observacao) {
+    throw new Error("OBSERVACAO_OBRIGATORIA");
+  }
+
+  if (dataPrevista !== null) {
+    if (
+      typeof dataPrevista !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(dataPrevista)
+    ) {
+      throw new Error("DATA_PREVISTA_INVALIDA");
+    }
+
+    const data = new Date(`${dataPrevista}T00:00:00`);
+
+    if (
+      Number.isNaN(data.getTime()) ||
+      data.toISOString().slice(0, 10) !== dataPrevista
+    ) {
+      throw new Error("DATA_PREVISTA_INVALIDA");
+    }
+  }
+
+  return {
+    titulo,
+    observacao,
+    dataPrevista
+  };
+}
+
 const DIRETORIO_ANEXOS = path.resolve(
   process.cwd(),
   "storage",
@@ -17,44 +59,6 @@ const TIPOS_PERMITIDOS = [
 
 function erroHttp(mensagem, status = 400) {
   return Object.assign(new Error(mensagem), { status });
-}
-
-function dataValida(data) {
-  if (!data) return true;
-
-  if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
-    return false;
-  }
-
-  const dataConvertida = new Date(`${data}T00:00:00Z`);
-
-  return (
-    !Number.isNaN(dataConvertida.getTime()) &&
-    dataConvertida.toISOString().slice(0, 10) === data
-  );
-}
-
-function validar(body = {}) {
-  const titulo = String(body.titulo || "").trim();
-  const observacao = String(body.observacao || "").trim();
-  const dataPrevista = body.dataPrevista || null;
-
-  if (
-    !titulo ||
-    titulo.length > 64 ||
-    !observacao ||
-    !dataValida(dataPrevista)
-  ) {
-    throw erroHttp(
-      "Confira o título, a observação e a data prevista."
-    );
-  }
-
-  return {
-    titulo,
-    observacao,
-    dataPrevista
-  };
 }
 
 async function limparArquivos(files = []) {
@@ -144,8 +148,8 @@ async function criar(req, res, next) {
 
 async function atualizar(req, res, next) {
   try {
-    const id = obterIdParametro(req.params.id, "Tarefa");
     const usuarioId = obterUsuarioId(req);
+    const id = obterIdParametro(req.params.id, "Tarefa");
     const dados = validar(req.body);
 
     const tarefa = await repo.atualizar({
@@ -156,7 +160,7 @@ async function atualizar(req, res, next) {
 
     if (!tarefa) {
       return res.status(404).json({
-        mensagem: "Tarefa não encontrada ou não está em digitação."
+        mensagem: "Tarefa não encontrada."
       });
     }
 

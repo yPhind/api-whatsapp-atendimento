@@ -218,7 +218,8 @@ async function atribuirParaAnalista({
       analista_anterior_id: atendimento.analista_id || null,
       analista_novo_id: resultado.analista_id,
       setor_id: atendimento.setor_id,
-      origem_acao: "painel"
+      origem_acao: "painel",
+      usuario_cliente_id: atendimento.usuario_id
     }
   });
 
@@ -301,7 +302,8 @@ async function alterarStatus({
       status_novo: resultado.status,
       analista_id: analistaId || null,
       perfil_responsavel: isSupervisor ? "supervisor" : "analista",
-      origem_acao: "painel"
+      origem_acao: "painel",
+      usuario_cliente_id: atendimento.usuario_id
     }
   });
 
@@ -398,7 +400,8 @@ async function editarAtendimento({
       descricao_alterada: atendimento.descricao !== descricaoLimpa,
       setor_anterior_id: atendimento.setor_id,
       setor_novo_id: setor.id,
-      origem_acao: "painel"
+      origem_acao: "painel",
+      usuario_cliente_id: atendimento.usuario_id
     }
   });
 
@@ -458,7 +461,8 @@ async function assumirAtendimento({
     contexto: {
       analista_id: analistaId,
       setor_id: setorId,
-      acao: "assumir_atendimento"
+      acao: "assumir_atendimento",
+      usuario_cliente_id: atendimento.usuario_id
     }
   });
 
@@ -536,7 +540,8 @@ async function devolverParaFila({
       status_anterior: atendimento.status,
       status_novo: resultado.status || "aguardando",
       perfil_responsavel: perfil,
-      setor_id: atendimento.setor_id
+      setor_id: atendimento.setor_id,
+      usuario_cliente_id: atendimento.usuario_id
     }
   });
 
@@ -611,7 +616,8 @@ async function alterarSetorAtendimento({
       setor_novo_id: resultado.setor_id,
       analista_anterior_id: atendimento.analista_id || null,
       status_anterior: atendimento.status,
-      status_novo: resultado.status || "aguardando"
+      status_novo: resultado.status || "aguardando",
+      usuario_cliente_id: atendimento.usuario_id
     }
   });
 
@@ -712,7 +718,8 @@ async function replicarAtendimento({
       atendimento_novo_id: Number(novo.atendimento.id),
       setor_destino_id: Number(setorId),
       analista_destino_id: atendimento?.analista_id || null,
-      origem_acao: "painel"
+      origem_acao: "painel",
+      usuario_cliente_id: novo.usuario.id
     }
   });
 
