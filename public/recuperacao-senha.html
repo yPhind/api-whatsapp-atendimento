@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recuperação de Senha</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="public/image/favicon.ico">
+</head>
+
+<body>
+
+    <main class="recuperacao-container">
+
+        <section class="recuperacao-card">
+
+            <div class="recuperacao-brand">
+                <div class="recuperacao-icon">🔐</div>
+
+                <h1>Recuperar senha</h1>
+
+                <p>
+                    Informe seu e-mail e enviaremos as instruções
+                    para redefinir sua senha.
+                </p>
+            </div>
+
+            <form id="recuperacao-form">
+
+                <label for="recuperacao-email">E-mail</label>
+
+                <input id="recuperacao-email" type="email" required autocomplete="email" placeholder="seu@email.com">
+
+                <p id="recuperacao-mensagem" class="recuperacao-mensagem" role="status" aria-live="polite">
+                </p>
+
+                <button type="submit" id="recuperacao-button">
+                    Enviar
+                </button>
+
+                <a href="/index.html" id="voltar-login-button" class="link-button">
+                    Voltar para o login
+                </a>
+
+            </form>
+
+        </section>
+
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/recuperacao.js"></script>
+
+</body>
+
+</html>

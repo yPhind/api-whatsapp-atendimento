@@ -1,0 +1,354 @@
+
+const db = require("../config/database");
+const { clientes } = require("../config/databases");
+
+async function incluirCnpjEmpresas(registros) {
+  if (!registros.length) return registros;
+
+  const ids = [
+    ...new Set(
+      registros
+        .map((registro) => registro.empresa_id)
+        .filter((id) => id !== null && id !== undefined)
+    )
+  ];
+
+  if (!ids.length) {
+    return registros.map((registro) => ({
+      ...registro,
+      cnpj: null
+    }));
+  }
+
+  const resultado = await clientes.query(
+    `
+      SELECT id, cnpj
+      FROM wb_empresas
+      WHERE id = ANY($1::bigint[])
+    `,
+    [ids]
+  );
+
+  const empresas = new Map(
+    resultado.rows.map((empresa) => [
+      String(empresa.id),
+      empresa.cnpj
+    ])
+  );
+
+  return registros.map((registro) => ({
+    ...registro,
+    cnpj: empresas.get(String(registro.empresa_id)) || null
+  }));
+}
+
+async function criar({
+  usuarioId,
+  setorId,
+  empresaId,
+  descricao,
+  protocolo,
+  atendimentoOrigemId = null
+}) {
+  const resultado = await db.query(
+    `INSERT INTO wb_atendimentos
+      (usuario_id, setor_id, empresa_id, descricao, protocolo, atendimento_origem_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING *`,
+    [usuarioId, setorId, empresaId, descricao, protocolo, atendimentoOrigemId]
+  );
+
+  return resultado.rows[0];
+}
+
+async function buscarPorId(id) {
+  const resultado = await db.query(
+    `SELECT a.*,
+            u.nome AS usuario_nome,
+            u.telefone AS usuario_telefone,
+            s.nome AS setor_nome,
+            an.nome AS analista_nome
+     FROM wb_atendimentos a
+     JOIN wb_usuarios u ON u.id = a.usuario_id
+     JOIN wb_setores s ON s.id = a.setor_id
+     LEFT JOIN wb_usuarios_sistema an
+       ON an.id = a.analista_id
+     WHERE a.id = $1`,
+    [id]
+  );
+
+  return resultado.rows[0] || null;
+}
+
+
+async function buscarAbertoPorTelefone(telefone) {
+  const resultado = await db.query(
+    `SELECT a.*, u.nome AS usuario_nome, u.telefone AS usuario_telefone,
+            s.nome AS setor_nome, an.nome AS analista_nome
+       FROM wb_atendimentos a
+       JOIN wb_usuarios u ON u.id = a.usuario_id
+       JOIN wb_setores s ON s.id = a.setor_id
+       LEFT JOIN wb_usuarios_sistema an ON an.id = a.analista_id
+      WHERE u.telefone = $1
+        AND a.arquivado = FALSE
+        AND a.status <> 'realizado'
+      ORDER BY a.atualizado_em DESC NULLS LAST, a.id DESC
+      LIMIT 1`,
+    [telefone]
+  );
+  return resultado.rows[0] || null;
+}
+
+async function listarFila(setorId = null) {
+  const resultado = await db.query(
+    `SELECT a.id, a.protocolo, a.descricao, a.atendimento_origem_id,
+            a.status, a.criado_em,
+            u.nome AS usuario_nome,
+            u.telefone AS usuario_telefone,
+            s.nome AS setor_nome,
+            a.setor_id
+     FROM wb_atendimentos a
+     JOIN wb_usuarios u ON u.id = a.usuario_id
+     JOIN wb_setores s ON s.id = a.setor_id
+     WHERE ($1::integer IS NULL OR a.setor_id = $1)
+       AND a.analista_id IS NULL
+       AND a.status = 'aguardando'
+       AND a.arquivado = FALSE
+     ORDER BY a.id DESC`,
+    [setorId]
+  );
+
+  return resultado.rows;
+}
+
+async function listarDoAnalista(analistaId) {
+  const resultado = await db.query(
+    `SELECT a.*, u.nome AS usuario_nome,
+            u.telefone AS usuario_telefone,
+            s.nome AS setor_nome,
+            e.cnpj AS cnpj,
+            an.nome AS analista_nome
+     FROM wb_atendimentos a
+     JOIN wb_usuarios u ON u.id = a.usuario_id
+     JOIN wb_setores s ON s.id = a.setor_id
+     LEFT JOIN wb_usuarios_sistema an ON an.id = a.analista_id
+     WHERE a.analista_id = $1
+       AND a.arquivado = FALSE
+       AND a.status IN ('em_atendimento', 'pendente')
+     ORDER BY a.id DESC`,
+    [analistaId]
+  );
+
+  return incluirCnpjEmpresas(resultado.rows);
+}
+
+async function listarTodosParaSupervisor() {
+  const resultado = await db.query(
+    `SELECT a.*,
+            u.nome AS usuario_nome,
+            u.telefone AS usuario_telefone,
+            s.nome AS setor_nome,
+            an.nome AS analista_nome
+     FROM wb_atendimentos a
+     JOIN wb_usuarios u ON u.id = a.usuario_id
+     JOIN wb_setores s ON s.id = a.setor_id
+     LEFT JOIN wb_usuarios_sistema an
+       ON an.id = a.analista_id
+     WHERE a.arquivado = FALSE
+     ORDER BY a.id DESC`
+  );
+
+  return incluirCnpjEmpresas(resultado.rows)
+}
+
+async function assumir({ atendimentoId, analistaId, setorId }) {
+  const resultado = await db.query(
+    `UPDATE wb_atendimentos
+     SET analista_id = $2,
+         status = 'em_atendimento',
+         iniciado_em = COALESCE(iniciado_em, CURRENT_TIMESTAMP),
+         atualizado_em = CURRENT_TIMESTAMP
+     WHERE id = $1
+       AND ($3::integer IS NULL OR setor_id = $3::integer)
+       AND analista_id IS NULL
+       AND status = 'aguardando'
+       AND arquivado = FALSE
+     RETURNING *`,
+    [atendimentoId, analistaId, setorId]
+  );
+
+  return resultado.rows[0] || null;
+}
+
+async function atribuirParaAnalista({ atendimentoId, analistaId }) {
+  const resultado = await db.query(
+    `UPDATE wb_atendimentos
+     SET analista_id = $2,
+         status = 'em_atendimento',
+         iniciado_em = COALESCE(iniciado_em, CURRENT_TIMESTAMP),
+         atualizado_em = CURRENT_TIMESTAMP
+     WHERE id = $1
+       AND arquivado = FALSE
+       AND status <> 'realizado'
+     RETURNING *`,
+    [atendimentoId, analistaId]
+  );
+
+  return resultado.rows[0] || null;
+}
+
+async function alterarStatus({
+  atendimentoId,
+  analistaId,
+  status,
+  isSupervisor = false
+}) {
+  let resultado;
+
+  if (status === "aguardando") {
+    resultado = await db.query(
+      `UPDATE wb_atendimentos
+       SET status = 'aguardando',
+           analista_id = NULL,
+           iniciado_em = NULL,
+           finalizado_em = NULL,
+           atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND ($3::boolean = TRUE OR analista_id = $2)
+         AND arquivado = FALSE
+         AND (LOWER(status) <> 'realizado' OR $3::boolean = TRUE)
+       RETURNING *`,
+      [atendimentoId, analistaId, isSupervisor]
+    );
+  } else if (status === "realizado") {
+    resultado = await db.query(
+      `UPDATE wb_atendimentos
+       SET status = $3,
+           finalizado_em = CURRENT_TIMESTAMP,
+           atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND ($4::boolean = TRUE OR analista_id = $2)
+         AND arquivado = FALSE
+         AND (status <> 'realizado' OR $4::boolean = TRUE)
+       RETURNING *`,
+      [atendimentoId, analistaId, status, isSupervisor]
+    );
+  } else {
+    resultado = await db.query(
+      `UPDATE wb_atendimentos
+       SET status = $3,
+           finalizado_em = NULL,
+           atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND ($4::boolean = TRUE OR analista_id = $2)
+         AND arquivado = FALSE
+         AND (status <> 'realizado' OR $4::boolean = TRUE)
+       RETURNING *`,
+      [atendimentoId, analistaId, status, isSupervisor]
+    );
+  }
+
+  return resultado.rows[0] || null;
+}
+
+async function devolverParaFila(atendimentoId) {
+  const resultado = await db.query(
+    `UPDATE wb_atendimentos
+     SET analista_id = NULL,
+         status = 'aguardando',
+         iniciado_em = NULL,
+         finalizado_em = NULL,
+         atualizado_em = CURRENT_TIMESTAMP
+     WHERE id = $1
+       AND arquivado = FALSE
+       AND status <> 'realizado'
+     RETURNING *`,
+    [atendimentoId]
+  );
+
+  return resultado.rows[0] || null;
+}
+
+
+async function listarHistorico() {
+  const resultado = await db.query(
+    `SELECT a.*,
+            u.nome AS usuario_nome,
+            u.telefone AS usuario_telefone,
+            s.nome AS setor_nome,
+            an.nome AS analista_nome,
+            (SELECT COUNT(*)::integer
+               FROM wb_mensagens m
+              WHERE m.atendimento_id = a.id) AS total_mensagens,
+            (SELECT MAX(m.criado_em)
+               FROM wb_mensagens m
+              WHERE m.atendimento_id = a.id) AS ultima_mensagem_em
+     FROM wb_atendimentos a
+     JOIN wb_usuarios u ON u.id = a.usuario_id
+     JOIN wb_setores s ON s.id = a.setor_id
+     LEFT JOIN wb_usuarios_sistema an ON an.id = a.analista_id
+     WHERE a.status = 'realizado' OR a.arquivado = TRUE
+     ORDER BY COALESCE(
+       (SELECT MAX(m.criado_em)
+          FROM wb_mensagens m
+         WHERE m.atendimento_id = a.id),
+       a.atualizado_em,
+       a.criado_em
+     ) DESC, a.id DESC`
+  );
+
+  return resultado.rows;
+}
+
+
+async function alterarSetor({ atendimentoId, setorId }) {
+  const resultado = await db.query(
+    `UPDATE wb_atendimentos
+     SET setor_id = $2,
+         analista_id = NULL,
+         status = 'aguardando',
+         iniciado_em = NULL,
+         finalizado_em = NULL,
+         atualizado_em = CURRENT_TIMESTAMP
+     WHERE id = $1
+       AND arquivado = FALSE
+       AND status <> 'realizado'
+     RETURNING *`,
+    [atendimentoId, setorId]
+  );
+
+  return resultado.rows[0] || null;
+}
+
+async function editarDados({ atendimentoId, setorId, descricao }) {
+  const resultado = await db.query(
+    `UPDATE wb_atendimentos
+     SET setor_id = $2,
+         descricao = $3,
+         analista_id = CASE WHEN setor_id <> $2 THEN NULL ELSE analista_id END,
+         status = CASE WHEN setor_id <> $2 THEN 'aguardando' ELSE status END,
+         iniciado_em = CASE WHEN setor_id <> $2 THEN NULL ELSE iniciado_em END,
+         finalizado_em = CASE WHEN setor_id <> $2 THEN NULL ELSE finalizado_em END,
+         atualizado_em = CURRENT_TIMESTAMP
+     WHERE id = $1 AND arquivado = FALSE
+     RETURNING *`,
+    [atendimentoId, setorId, descricao]
+  );
+  return resultado.rows[0] || null;
+}
+
+module.exports = {
+  criar,
+  buscarPorId,
+  buscarAbertoPorTelefone,
+  listarFila,
+  listarDoAnalista,
+  listarTodosParaSupervisor,
+  listarHistorico,
+  assumir,
+  atribuirParaAnalista,
+  alterarStatus,
+  editarDados,
+  devolverParaFila,
+  alterarSetor
+};

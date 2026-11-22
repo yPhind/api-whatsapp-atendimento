@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel de Atendimento</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <div class="dashboard" style="overflow-y: auto; flex-grow: 1;">
+    <aside class="sidebar">
+      <div class="home">
+        <a href="/dashboard.html">
+          <img src="/image/SC.png" alt="Soft Clever"><br>
+        </a>
+      </div>
+
+      <nav>
+        <button class="nav-button active" data-view="inicio">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Início
+        </button>
+
+        <button class="nav-button" data-view="fila">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16l2 11v4H2v-4L4 4Z"/><path d="M2 15h6l2 3h4l2-3h6"/></svg> Fila de atendimentos
+        </button>
+
+        <button class="nav-button" data-view="meus">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13v-2a9 9 0 0 1 18 0v2"/><rect x="3" y="12" width="5" height="8" rx="2"/><rect x="16" y="12" width="5" height="8" rx="2"/><path d="M21 19a4 4 0 0 1-4 3h-3"/></svg> Meus atendimentos
+        </button>
+
+        <button class="nav-button" data-view="tarefas">
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6M9 10h6M9 14h6M9 18h3"/></svg> Tarefas
+        </button>
+
+        <button class="nav-button" data-view="usuarios" id="nav-usuarios" hidden>
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Gerenciar usuários
+        </button>
+
+        <button class="nav-button" data-view="historico" id="nav-historico" hidden>
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg> Histórico de atendimentos
+        </button>
+
+        <button class="nav-button" data-view="logs" id="nav-logs" hidden>
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg> Tabela de Logs
+        </button>
+
+        <div class="sidebar-footer">
+          <span id="usuario-nome">Carregando usuário...</span>
+          <button id="logout-button" class="logout-button">
+            Desconectar
+          </button>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <h1 id="view-title">Fila de Atendimentos</h1>
+          <p>Central de atendimento WhatsApp Business</p>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" id="abrir-atendimento-button" class="primary-button" hidden>+ Abrir atendimento</button>
+          <span class="online-status">● On-line</span>
+        </div>
+      </header>
+
+      <section id="inicio-section" class="inicio-dashboard">
+        <div class="section-header inicio-cabecalho">
+          <div>
+            <h2>Dashboard atendimentos</h2>
+            <p id="inicio-descricao">Acompanhe os indicadores atualizados dos atendimentos.</p>
+          </div>
+          <button type="button" id="atualizar-indicadores" class="secondary-button">Atualizar gráficos</button>
+        </div>
+
+        <div id="inicio-resumo" class="inicio-resumo" aria-live="polite">
+          <article class="inicio-indicador status-aguardando"><span>Aguardando</span><strong
+              id="inicio-total-aguardando">—</strong></article>
+          <article class="inicio-indicador status-pendente"><span>Pendente</span><strong
+              id="inicio-total-pendente">—</strong></article>
+          <article class="inicio-indicador status-em_atendimento"><span>Em atendimento</span><strong
+              id="inicio-total-em-atendimento">—</strong></article>
+          <article class="inicio-indicador status-realizado"><span>Realizados</span><strong
+              id="inicio-total-realizado">—</strong></article>
+        </div>
+
+        <div class="inicio-graficos-grid">
+          <article class="inicio-grafico-card inicio-grafico-setores">
+            <div class="inicio-grafico-cabecalho">
+              <h3>Atendimentos por setor e status</h3>
+              <p>Quantidade atual em cada setor.</p>
+            </div>
+            <div id="grafico-atendimentos-setor" class="inicio-grafico-area" role="img"
+              aria-label="Gráfico de barras de atendimentos por setor e status">
+              <p class="inicio-carregando">Carregando indicadores...</p>
+            </div>
+          </article>
+          <article class="inicio-grafico-card inicio-grafico-status">
+            <div class="inicio-grafico-cabecalho">
+              <h3>Distribuição por status</h3>
+              <p>Participação de cada status no total atual.</p>
+            </div>
+            <div id="grafico-distribuicao-status" class="inicio-grafico-area" role="img"
+              aria-label="Gráfico de distribuição dos atendimentos por status">
+              <p class="inicio-carregando">Carregando indicadores...</p>
+            </div>
+          </article>
+        </div>
+
+        <article class="inicio-grafico-card inicio-grafico-mensal-card">
+          <div class="inicio-grafico-cabecalho">
+            <h3>Volume mensal por setor</h3>
+            <p>Últimos 12 meses, separados por status. Os atendimentos em andamento são agrupados pelo mês de abertura;
+              os realizados, pelo mês de finalização.</p>
+          </div>
+          <div id="graficos-mensais-setor" class="inicio-graficos-mensais">
+            <p class="inicio-carregando">Carregando histórico mensal...</p>
+          </div>
+        </article>
+      </section>
+
+      <section class="metrics" hidden>
+        <article class="metric-card" id="metric-aguardando">
+          <span>Aguardando</span>
+          <strong id="total-aguardando">0</strong>
+          <div id="aguardando-por-setor" class="aguardando-por-setor" hidden></div>
+        </article>
+        <article class="metric-card" id="metric-meus" hidden>
+          <span>Meus atendimentos</span>
+          <strong id="total-meus">0</strong>
+        </article>
+      </section>
+
+      <section class="tickets-section" id="tickets-section" hidden>
+        <div class="section-header">
+          <h2 id="section-title">Atendimentos disponíveis</h2>
+          <button id="refresh-button" class="secondary-button">
+            Atualizar
+          </button>
+        </div>
+
+        <div class="atendimento-layout">
+
+          <div id="ticket-list" class="ticket-list">
+            <p>Carregando chamados...</p>
+          </div>
+
+          <section id="chat-section" class="chat-section" hidden>
+            <div class="chat-header">
+              <div>
+                <h2 id="chat-cliente">Selecione um atendimento</h2>
+                <p id="chat-empresa"></p>
+                <p id="chat-protocolo"></p>
+              </div>
+
+              <span id="chat-status" class="chat-status"></span>
+            </div>
+
+            <div id="chat-mensagens" class="chat-mensagens">
+              <p class="chat-vazio">
+                Selecione um atendimento para visualizar a conversa.
+              </p>
+            </div>
+
+            <form id="chat-form" class="chat-form">
+              <input type="text" id="chat-input" name="mensagem" placeholder="Digite uma mensagem..." autocomplete="off"
+                maxlength="4000" required>
+
+              <button type="submit" id="chat-enviar" class="primary-button">
+                Enviar
+              </button>
+            </form>
+
+            <p id="chat-mensagem-status" role="status" aria-live="polite"></p>
+          </section>
+
+        </div>
+      </section>
+
+      <section id="tarefas-section" class="tarefas-section" hidden>
+        <div class="tarefas-toolbar">
+          <div class="tarefas-visualizacao" role="group" aria-label="Visualização das tarefas">
+            <button type="button" id="tarefas-modo-quadros" class="secondary-button active" aria-pressed="true">Quadros</button>
+            <button type="button" id="tarefas-modo-lista" class="secondary-button" aria-pressed="false">Lista</button>
+          </div>
+          <button type="button" id="ver-tarefas-realizadas" class="secondary-button">Tarefas realizadas</button>
+          <button type="button" id="criar-tarefa" class="primary-button">+ Criar tarefa</button>
+        </div>
+        <div id="tarefas-lista" class="tarefas-grid" aria-live="polite">
+          <p>Carregando tarefas...</p>
+        </div>
+      </section>
+
+      <section id="usuarios-section" class="tickets-section" hidden>
+
+        <div class="section-header">
+          <div>
+            <h2>Gerenciar usuários</h2>
+            <p>Gerencie os analistas cadastrados no sistema.</p>
+          </div>
+
+          <div class="acoes-relatorio">
+            <button type="button" class="secondary-button" data-abrir-relatorio="usuarios">Gerar relatório</button>
+            <button type="button" id="abrir-cadastro-analista" class="primary-button">
+              + Cadastrar analista
+            </button>
+          </div>
+        </div>
+
+        <div class="analistas-container">
+          <div class="section-header">
+            <h2>Analistas cadastrados</h2>
+            <div class="analistas-header-acoes">
+              <button type="button" id="limpar-filtros-analistas" class="secondary-button">Limpar</button>
+              <button type="button" id="atualizar-analistas" class="secondary-button">
+                Atualizar lista
+              </button>
+            </div>
+          </div>
+
+          <div class="analistas-filtros">
+            <label class="analistas-busca-label" for="filtro-analistas">Buscar analista</label>
+            <input id="filtro-analistas" type="search" placeholder="Nome, login ou e-mail..." autocomplete="off">
+            <label for="filtro-situacao-analistas">Situação</label>
+            <select id="filtro-situacao-analistas">
+              <option value="todos">Todas</option>
+              <option value="ativo">Ativos</option>
+              <option value="inativo">Inativos</option>
+            </select>
+            <label for="filtro-setor-analistas">Setor</label>
+            <select id="filtro-setor-analistas">
+              <option value="todos">Todos os setores</option>
+            </select>
+          </div>
+          <div id="analistas-resumo" class="analistas-resumo" aria-live="polite"></div>
+          <div id="analistas-lista" class="analistas-lista">
+            <p>Carregue a lista para visualizar os analistas.</p>
+          </div>
+        </div>
+      </section>
+      <div id="modal-cadastro-analista" class="modal-overlay" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-cadastro-analista-titulo">
+
+          <button type="button" id="fechar-modal-cadastro-analista" class="modal-fechar" aria-label="Fechar">
+            ×
+          </button>
+
+          <h2 id="modal-cadastro-analista-titulo">
+            Cadastrar novo analista
+          </h2>
+
+          <p>
+            Preencha os dados para criar o acesso do novo analista.
+          </p>
+
+          <form id="form-analista" class="user-form">
+
+            <label for="analista-nome">Nome completo</label>
+            <input id="analista-nome" name="nome" type="text" minlength="2" maxlength="150" required
+              placeholder="Nome do analista">
+
+            <label for="analista-email">E-mail</label>
+            <input id="analista-email" name="email" type="email" maxlength="255" required
+              placeholder="nome@empresa.com">
+
+            <label for="analista-username">Login</label>
+            <input id="analista-username" name="username" type="text" minlength="3" maxlength="80" required
+              placeholder="nome.sobrenome">
+
+            <label for="analista-senha">Senha inicial</label>
+            <input id="analista-senha" name="senha" type="password" minlength="4" maxlength="128"
+              autocomplete="new-password" required placeholder="Mínimo de 4 caracteres">
+
+            <label for="analista-setor">Setor</label>
+            <select id="analista-setor" name="setorId" required>
+              <option value="">Carregando setores...</option>
+            </select>
+
+            <p id="analista-mensagem" role="status" aria-live="polite">
+            </p>
+
+            <div class="modal-acoes">
+              <button type="button" id="cancelar-cadastro-analista" class="secondary-button">
+                Cancelar
+              </button>
+
+              <button type="submit" id="salvar-analista" class="primary-button">
+                Cadastrar analista
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+      <section id="historico-section" class="tickets-section" hidden>
+
+        <div class="section-header">
+          <div>
+            <h2>Histórico de atendimentos</h2>
+            <p>
+              Visualização dos atendimentos finalizados e suas respectivas conversas.
+            </p>
+          </div>
+          <button type="button" class="secondary-button" data-abrir-relatorio="historico">Gerar relatório</button>
+        </div>
+
+        <div class="filtros-tabela filtros-historico" id="historico-filtros">
+          <label>Chamado #<input type="search" data-filtro-historico="id" placeholder="Número"></label>
+          <label>Protocolo<input type="search" data-filtro-historico="protocolo" placeholder="Protocolo"></label>
+          <label>Cliente<input type="search" data-filtro-historico="cliente" placeholder="Nome do cliente"></label>
+          <label>Analista<input type="search" data-filtro-historico="analista" placeholder="Nome do analista"></label>
+          <label>Setor<input type="search" data-filtro-historico="setor" placeholder="Setor"></label>
+          <label>Data de finalização<input type="date" data-filtro-historico="data"></label>
+          <div class="filtros-acoes"><button type="button" id="aplicar-filtros-historico"
+              class="secondary-button">Aplicar</button><button type="button" id="limpar-filtros-historico"
+              class="secondary-button">Limpar</button></div>
+        </div>
+        <div class="lista-paginacao-controles" id="historico-paginacao-controles">
+          <label>Mostrar <select id="historico-tamanho-pagina">
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="todos">Todos</option>
+            </select> registros</label>
+          <span id="historico-paginacao-resumo">0 registros</span>
+          <div class="lista-paginacao-botoes"><button type="button" id="historico-pagina-anterior"
+              class="secondary-button">Anterior</button><span id="historico-pagina-atual">Página 1 de 1</span><button
+              type="button" id="historico-pagina-proxima" class="secondary-button">Próxima</button></div>
+        </div>
+        <div id="historico-lista" class="ticket-list">
+          <p>O histórico de atendimentos será carregado nesta área.</p>
+        </div>
+
+      </section>
+
+      <div id="modal-historico-conversa" class="modal-overlay" hidden>
+        <div class="modal-card modal-historico-card" role="dialog" aria-modal="true"
+          aria-labelledby="modal-historico-titulo">
+          <button type="button" id="fechar-modal-historico" class="modal-fechar" aria-label="Fechar">×</button>
+          <h2 id="modal-historico-titulo">Conversa do atendimento</h2>
+          <div id="modal-historico-mensagens" class="historico-modal-mensagens">
+            <p>Selecione “Visualizar conversa”.</p>
+          </div>
+        </div>
+      </div>
+
+      <section id="logs-section" class="tickets-section" hidden>
+
+        <div class="section-header">
+          <div>
+            <h2>Tabela de Logs</h2>
+            <p>
+              Registro das ações realizadas nos atendimentos.
+            </p>
+          </div>
+          <button type="button" class="secondary-button" data-abrir-relatorio="logs">Gerar relatório</button>
+        </div>
+
+        <div class="logs-filtros-container">
+          <div class="lista-paginacao-controles" id="logs-paginacao-controles">
+            <label>Mostrar <select id="logs-tamanho-pagina">
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="todos">Todos</option>
+              </select> registros</label>
+            <span id="logs-paginacao-resumo">0 registros</span>
+            <div class="lista-paginacao-botoes"><button type="button" id="logs-pagina-anterior"
+                class="secondary-button">Anterior</button><span id="logs-pagina-atual">Página 1 de 1</span><button
+                type="button" id="logs-pagina-proxima" class="secondary-button">Próxima</button></div>
+          </div>
+          <div class="logs-filtros-toolbar">
+            <p class="filtros-ajuda">Preencha uma ou mais colunas e clique em Aplicar para atualizar a lista.</p>
+            <div class="filtros-acoes filtros-acoes-logs">
+              <button type="button" id="aplicar-filtros-logs" class="secondary-button">Aplicar</button>
+              <button type="button" id="limpar-filtros-logs" class="secondary-button">Limpar</button>
+            </div>
+          </div>
+          <div id="logs-lista" class="ticket-list">
+            <p>Os registros de logs serão carregados nesta área.</p>
+          </div>
+        </div>
+
+      </section>
+
+      <div id="modal-gerar-relatorio" class="modal-overlay" hidden>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-relatorio-titulo">
+          <button type="button" id="fechar-modal-relatorio" class="modal-fechar" aria-label="Fechar">×</button>
+          <h2 id="modal-relatorio-titulo">Gerar relatório</h2>
+          <p id="modal-relatorio-descricao">Informe o nome e o formato do arquivo.</p>
+          <form id="form-gerar-relatorio">
+            <label for="nome-relatorio">Nome do relatório</label>
+            <input type="text" id="nome-relatorio" name="nome" maxlength="100" required
+              placeholder="Ex.: Relatório de atendimentos - Novembro">
+            <label for="formato-relatorio">Formato do arquivo</label>
+            <select id="formato-relatorio" name="formato" required>
+              <option value="xlsx">Excel (.xlsx)</option>
+              <option value="pdf">PDF (.pdf)</option>
+            </select>
+            <p id="mensagem-relatorio" role="status" aria-live="polite"></p>
+            <div class="modal-acoes">
+              <button type="button" id="cancelar-relatorio" class="secondary-button">Cancelar</button>
+              <button type="submit" id="confirmar-relatorio" class="primary-button">Gerar arquivo</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="modal-trocar-senha" class="modal-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-trocar-senha-titulo">
+      <h2 id="modal-trocar-senha-titulo">Troque sua senha</h2>
+
+      <p>
+        Sua senha atual é temporária. Por segurança, você precisa criar uma
+        nova senha para continuar utilizando o sistema.
+      </p>
+
+      <form id="form-trocar-senha">
+        <label for="nova-senha">Nova senha</label>
+        <input type="password" id="nova-senha" minlength="4" autocomplete="new-password" required>
+
+        <label for="confirmar-nova-senha">Confirmar nova senha</label>
+        <input type="password" id="confirmar-nova-senha" minlength="4" autocomplete="new-password" required>
+
+        <p id="mensagem-trocar-senha" role="alert"></p>
+
+        <button type="submit" class="primary-button">
+          Alterar senha
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-redefinir-senha" class="modal-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-redefinir-titulo">
+
+      <button type="button" id="fechar-modal-redefinir" class="modal-fechar" aria-label="Fechar">
+        ×
+      </button>
+
+      <h2 id="modal-redefinir-titulo">Senha temporária</h2>
+
+      <p id="modal-redefinir-usuario"></p>
+
+      <p>
+        A senha temporária foi gerada com sucesso.
+        Informe esta senha ao usuário.
+      </p>
+
+      <div class="senha-temporaria-container">
+        <input type="text" id="senha-temporaria" readonly autocomplete="off">
+
+        <button type="button" id="copiar-senha-temporaria" class="secondary-button">
+          Copiar senha
+        </button>
+      </div>
+
+      <p id="copiar-senha-mensagem" role="status" aria-live="polite"></p>
+
+      <p class="modal-aviso">
+        No próximo acesso, o usuário deverá criar uma nova senha.
+      </p>
+
+      <button type="button" id="ok-modal-redefinir" class="primary-button">
+        Entendi
+      </button>
+
+    </div>
+  </div>
+
+
+  <div id="modal-abrir-atendimento" class="modal-overlay" hidden>
+    <div class="modal-card modal-abrir-atendimento" role="dialog" aria-modal="true"
+      aria-labelledby="modal-abrir-atendimento-titulo">
+      <button type="button" id="fechar-modal-abrir-atendimento" class="modal-fechar" aria-label="Fechar">×</button>
+      <h2 id="modal-abrir-atendimento-titulo">Abrir atendimento</h2>
+      <p id="modal-abrir-atendimento-descricao">Informe os dados do cliente e descreva o motivo do contato.</p>
+      <form id="form-abrir-atendimento" class="user-form">
+        <label for="novo-cliente-nome">Nome do cliente</label>
+        <input id="novo-cliente-nome" name="nome" type="text" minlength="2" maxlength="150" required
+          autocomplete="name">
+
+        <div id="cadastro-empresa-nova" hidden>
+          <p>Empresa não cadastrada. Preencha os dados para cadastrá-la.</p>
+          <label for="nova-empresa-razao">Razão social</label>
+          <input id="nova-empresa-razao" name="razaoSocial" maxlength="255">
+          <label for="nova-empresa-fantasia">Nome fantasia (opcional)</label>
+          <input id="nova-empresa-fantasia" name="nomeFantasia" maxlength="255">
+        </div>
+        <label for="novo-cliente-telefone">Telefone / WhatsApp</label>
+        <input id="novo-cliente-telefone" name="telefone" type="tel" minlength="10" maxlength="20" required
+          placeholder="Ex.: 5511999999999" autocomplete="tel">
+
+        <label for="novo-cliente-cnpj">CNPJ da empresa</label>
+        <input id="novo-cliente-cnpj" name="cnpj" type="text" inputmode="numeric" maxlength="18" required
+          placeholder="00.000.000/0000-00">
+
+        <div id="abrir-setor-container">
+          <label for="novo-atendimento-setor">Setor responsável</label>
+          <select id="novo-atendimento-setor" name="setorId" required>
+            <option value="">Selecione um setor</option>
+          </select>
+        </div>
+        <p id="abrir-setor-analista-info" hidden>Selecione o setor de destino. O atendimento ficará disponível na fila
+          desse setor.</p>
+        <div id="replicar-analista-container" hidden>
+          <label for="replicar-atendimento-analista">Analista responsável (opcional)</label>
+          <select id="replicar-atendimento-analista" name="analistaId">
+            <option value="">Deixar na fila do setor</option>
+          </select>
+        </div>
+
+        <label for="novo-atendimento-descricao">Motivo do atendimento</label>
+        <textarea id="novo-atendimento-descricao" name="descricao" rows="4" maxlength="4000" required
+          placeholder="Descreva o motivo do contato..."></textarea>
+
+        <p id="abrir-atendimento-mensagem" role="status" aria-live="polite"></p>
+        <div class="modal-acoes">
+          <button type="button" id="cancelar-abrir-atendimento" class="secondary-button">Cancelar</button>
+          <button type="submit" id="confirmar-abrir-atendimento" class="primary-button">Abrir e iniciar
+            atendimento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-criar-tarefa" class="modal-overlay" hidden>
+    <div class="modal-card modal-tarefa" role="dialog" aria-modal="true" aria-labelledby="modal-tarefa-titulo">
+      <button type="button" id="fechar-modal-tarefa" class="modal-fechar" aria-label="Fechar">×</button>
+      <h2 id="modal-tarefa-titulo">Criar tarefa</h2>
+      <form id="form-criar-tarefa">
+        <label for="tarefa-titulo">Título</label>
+        <input id="tarefa-titulo" name="titulo" type="text" maxlength="64" required placeholder="Digite o título da tarefa">
+        <small id="tarefa-contador">0/64 caracteres</small>
+
+        <label for="tarefa-observacao">Observação</label>
+        <textarea id="tarefa-observacao" name="observacao" rows="5" required placeholder="Descreva os detalhes ou lembretes da tarefa"></textarea>
+
+        <label for="tarefa-data">Data prevista (opcional)</label>
+        <input id="tarefa-data" name="dataPrevista" type="date">
+        <label for="tarefa-anexos">Anexos (PDF, JPG, JPEG ou PNG; até 50 MB por arquivo)</label>
+        <input id="tarefa-anexos" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple>
+        <p id="tarefa-mensagem" role="status" aria-live="polite"></p>
+        <div class="modal-acoes">
+          <button type="button" id="cancelar-tarefa" class="secondary-button">Cancelar</button>
+          <button type="submit" id="salvar-tarefa" class="primary-button">Salvar tarefa</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-detalhe-tarefa" class="modal-overlay" hidden>
+    <div class="modal-card modal-tarefa-detalhe" role="dialog" aria-modal="true" aria-labelledby="detalhe-tarefa-titulo">
+      <button type="button" id="fechar-detalhe-tarefa" class="modal-fechar" aria-label="Fechar">×</button>
+      <h2 id="detalhe-tarefa-titulo"></h2>
+      <p id="detalhe-tarefa-observacao" class="detalhe-tarefa-observacao"></p>
+      <p id="detalhe-tarefa-data" class="tarefa-data"></p>
+      <div id="detalhe-tarefa-anexos"></div>
+      <div class="modal-acoes">
+        <button type="button" id="editar-detalhe-tarefa" class="secondary-button">Editar tarefa</button>
+        <button type="button" id="finalizar-detalhe-tarefa" class="primary-button">Marcar como realizada</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/dashboardCharts.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+
+</html>

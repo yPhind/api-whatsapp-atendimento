@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Central de Atendimento - Login</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <main class="login-container" id="login-container">
+    <section class="login-card">
+      <div class="brand">
+        <img src="image/Sirius.png" alt="Logo Soft Clever">
+        <h1>Central de Atendimento WEB</h1>
+        <p>SOFT CLEVER</p>
+      </div>
+
+      <form id="login-form">
+        <label for="login">USUÁRIO</label>
+        <input id="login" name="login" type="text" placeholder="Digite seu usuário" autocomplete="username" required>
+
+        <label for="senha">SENHA</label>
+        <input id="senha" name="senha" type="password" placeholder="Digite sua senha" autocomplete="current-password"
+          required>
+
+        <p id="login-erro" class="error-message"></p>
+
+        <button type="submit" id="login-button">
+          ENTRAR
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/login.js"></script>
+</body>
+
+</html>

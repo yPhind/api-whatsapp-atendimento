@@ -1,0 +1,56 @@
+
+const { clientes } = require("../config/database");
+
+async function buscarPorCnpj(cnpj) {
+  const resultado = await clientes.query(
+    `
+      SELECT id, cnpj, razao_social, nome_fantasia, status
+      FROM wb_empresas
+      WHERE cnpj = $1
+      LIMIT 1
+    `,
+    [cnpj]
+  );
+
+  return resultado.rows[0] || null;
+}
+
+async function buscarPorId(id) {
+  const resultado = await clientes.query(
+    `
+      SELECT id, cnpj, razao_social, nome_fantasia, status
+      FROM wb_empresas
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [id]
+  );
+
+  return resultado.rows[0] || null;
+}
+
+async function criar({ cnpj, razaoSocial, nomeFantasia }) {
+  const resultado = await clientes.query(
+    `
+      INSERT INTO wb_empresas (
+        cnpj,
+        razao_social,
+        nome_fantasia,
+        status
+      )
+      VALUES ($1, $2, $3, 'Ativa')
+      ON CONFLICT (cnpj)
+      DO UPDATE SET cnpj = EXCLUDED.cnpj
+      RETURNING id, cnpj, razao_social, nome_fantasia, status
+    `,
+    [cnpj, razaoSocial, nomeFantasia || null]
+  );
+
+  return resultado.rows[0];
+}
+
+module.exports = {
+  buscarPorCnpj,
+  buscarPorId,
+  criar
+};

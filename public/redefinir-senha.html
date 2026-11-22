@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redefinir senha</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" type="image/x-icon" href="public/image/favicon.ico">
+</head>
+
+<body>
+
+    <main class="recuperacao-container">
+
+        <section class="recuperacao-card">
+
+            <div class="recuperacao-brand">
+
+                <div class="recuperacao-icon">🔐</div>
+
+                <h1>Redefinir senha</h1>
+
+                <p>
+                    Digite sua nova senha abaixo para recuperar
+                    o acesso à sua conta.
+                </p>
+
+            </div>
+
+            <form id="redefinir-form">
+
+                <label for="nova-senha">
+                    Nova senha
+                </label>
+
+                <input
+                    id="nova-senha"
+                    type="password"
+                    required
+                    minlength="4"
+                    autocomplete="new-password"
+                    placeholder="Digite sua nova senha"
+                >
+
+                <label for="confirmar-senha">
+                    Confirmar nova senha
+                </label>
+
+                <input
+                    id="confirmar-senha"
+                    type="password"
+                    required
+                    minlength="4"
+                    autocomplete="new-password"
+                    placeholder="Digite novamente sua senha"
+                >
+
+                <p
+                    id="redefinir-mensagem"
+                    class="recuperacao-mensagem"
+                    role="status"
+                    aria-live="polite">
+                </p>
+
+                <button
+                    type="submit"
+                    id="redefinir-button">
+                    Redefinir senha
+                </button>
+
+                <a
+                    href="/index.html"
+                    id="voltar-login-button"
+                    class="link-button">
+                    Voltar para o login
+                </a>
+
+            </form>
+
+        </section>
+
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/redefinir-senha.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,253 @@
+CREATE TABLE IF NOT EXISTS wb_setores (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL UNIQUE,
+    descricao TEXT,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO wb_setores (nome, descricao)
+VALUES
+    ('Suporte expresso', 'Atendimentos rápidos e solicitações simples'),
+    ('Suporte técnico', 'Problemas técnicos e suporte especializado'),
+    ('Treinamento', 'Dúvidas e solicitações de treinamento'),
+    ('Financeiro', 'Pagamentos, cobranças e questões financeiras')
+ON CONFLICT (nome) DO NOTHING;
+
+
+CREATE TABLE IF NOT EXISTS wb_usuarios (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome VARCHAR(150),
+    telefone VARCHAR(20) NOT NULL UNIQUE,
+    identificacao VARCHAR(100),
+    whatsapp_id VARCHAR(100) UNIQUE,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_usuarios_nome
+    ON wb_usuarios (nome);
+
+	
+CREATE TABLE IF NOT EXISTS wb_usuarios_sistema (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nome VARCHAR(150) NOT NULL,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    username VARCHAR(80) NOT NULL UNIQUE,
+    senha_hash TEXT NOT NULL,
+    perfil VARCHAR(20) NOT NULL
+        CHECK (perfil IN ('supervisor', 'analista')),
+    setor_id BIGINT REFERENCES wb_setores(id)
+        ON DELETE RESTRICT,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    ultimo_acesso_em TIMESTAMPTZ,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT chk_wb_usuario_setor
+        CHECK (
+            (perfil = 'supervisor' AND setor_id IS NULL)
+            OR
+            (perfil = 'analista' AND setor_id IS NOT NULL)
+        )
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_usuarios_sistema_perfil
+    ON wb_usuarios_sistema (perfil);
+
+CREATE INDEX IF NOT EXISTS idx_wb_usuarios_sistema_setor
+    ON wb_usuarios_sistema (setor_id);
+
+
+CREATE TABLE IF NOT EXISTS wb_atendimentos (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    protocolo VARCHAR(30) NOT NULL UNIQUE,
+    usuario_id BIGINT NOT NULL REFERENCES wb_usuarios(id)
+        ON DELETE RESTRICT,
+    setor_id BIGINT NOT NULL REFERENCES wb_setores(id)
+        ON DELETE RESTRICT,
+    analista_id BIGINT REFERENCES wb_usuarios_sistema(id)
+        ON DELETE RESTRICT,
+    status VARCHAR(30) NOT NULL DEFAULT 'aguardando'
+        CHECK (
+            status IN (
+                'aguardando',
+                'em_atendimento',
+                'pendente',
+                'realizado'
+            )
+        ),
+    descricao TEXT NOT NULL,
+    arquivado BOOLEAN NOT NULL DEFAULT FALSE,
+    motivo_arquivamento TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    iniciado_em TIMESTAMPTZ,
+    finalizado_em TIMESTAMPTZ,
+    arquivado_em TIMESTAMPTZ,
+
+    CONSTRAINT chk_wb_atendimento_arquivamento
+        CHECK (
+            (arquivado = FALSE AND arquivado_em IS NULL)
+            OR
+            (arquivado = TRUE AND arquivado_em IS NOT NULL)
+        ),
+
+    CONSTRAINT chk_wb_atendimento_finalizado
+        CHECK (
+            (status = 'realizado' AND finalizado_em IS NOT NULL)
+            OR
+            (status <> 'realizado' AND finalizado_em IS NULL)
+        )
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_atendimentos_fila
+    ON wb_atendimentos (setor_id, status, criado_em)
+    WHERE arquivado = FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_wb_atendimentos_analista
+    ON wb_atendimentos (analista_id, status, atualizado_em)
+    WHERE arquivado = FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_wb_atendimentos_usuario
+    ON wb_atendimentos (usuario_id, criado_em DESC);
+
+CREATE INDEX IF NOT EXISTS idx_wb_atendimentos_arquivados
+    ON wb_atendimentos (arquivado, arquivado_em DESC);
+
+
+CREATE TABLE IF NOT EXISTS wb_mensagens (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    atendimento_id BIGINT NOT NULL
+        REFERENCES wb_atendimentos(id)
+        ON DELETE RESTRICT,
+    remetente_tipo VARCHAR(20) NOT NULL
+        CHECK (
+            remetente_tipo IN ('usuario', 'analista', 'sistema')
+        ),
+    remetente_id BIGINT,
+    direcao VARCHAR(10) NOT NULL
+        CHECK (direcao IN ('entrada', 'saida', 'interna')),
+    tipo VARCHAR(30) NOT NULL DEFAULT 'texto'
+        CHECK (
+            tipo IN (
+                'texto',
+                'imagem',
+                'audio',
+                'video',
+                'documento',
+                'localizacao',
+                'interativo',
+                'outro'
+            )
+        ),
+    conteudo TEXT,
+    midia_url TEXT,
+    identificador_externo VARCHAR(255) UNIQUE,
+    status_envio VARCHAR(20) NOT NULL DEFAULT 'recebida'
+        CHECK (
+            status_envio IN (
+                'recebida',
+                'aguardando_envio',
+                'enviada',
+                'entregue',
+                'lida',
+                'falha'
+            )
+        ),
+    dados_extras JSONB NOT NULL DEFAULT '{}'::JSONB,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    enviado_em TIMESTAMPTZ,
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_mensagens_atendimento
+    ON wb_mensagens (atendimento_id, criado_em);
+
+CREATE INDEX IF NOT EXISTS idx_wb_mensagens_status
+    ON wb_mensagens (status_envio, criado_em)
+    WHERE status_envio IN ('aguardando_envio', 'falha');
+
+
+CREATE TABLE IF NOT EXISTS wb_atendimentos_arquivados (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    atendimento_id BIGINT NOT NULL UNIQUE
+        REFERENCES wb_atendimentos(id)
+        ON DELETE RESTRICT,
+    usuario_id BIGINT NOT NULL,
+    setor_id BIGINT NOT NULL,
+    analista_id BIGINT,
+    protocolo VARCHAR(30) NOT NULL,
+    status_anterior VARCHAR(30) NOT NULL,
+    descricao TEXT NOT NULL,
+    motivo_arquivamento TEXT NOT NULL,
+    dados_snapshot JSONB NOT NULL DEFAULT '{}'::JSONB,
+    arquivado_por BIGINT REFERENCES wb_usuarios_sistema(id)
+        ON DELETE SET NULL,
+    criado_em TIMESTAMPTZ NOT NULL,
+    arquivado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_arquivados_data
+    ON wb_atendimentos_arquivados (arquivado_em DESC);
+
+CREATE INDEX IF NOT EXISTS idx_wb_arquivados_protocolo
+    ON wb_atendimentos_arquivados (protocolo);
+
+
+CREATE TABLE IF NOT EXISTS wb_recuperacao_senha (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    usuario_sistema_id BIGINT NOT NULL
+        REFERENCES wb_usuarios_sistema(id)
+        ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expira_em TIMESTAMPTZ NOT NULL,
+    utilizado_em TIMESTAMPTZ,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_recuperacao_usuario
+    ON wb_recuperacao_senha (usuario_sistema_id, expira_em);
+
+
+CREATE TABLE IF NOT EXISTS wb_historico_atendimentos (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    atendimento_id BIGINT NOT NULL
+        REFERENCES wb_atendimentos(id)
+        ON DELETE RESTRICT,
+    usuario_sistema_id BIGINT
+        REFERENCES wb_usuarios_sistema(id)
+        ON DELETE SET NULL,
+    acao VARCHAR(50) NOT NULL,
+    valor_anterior JSONB,
+    valor_novo JSONB,
+    observacao TEXT,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_historico_atendimento
+    ON wb_historico_atendimentos (atendimento_id, criado_em);
+
+CREATE TABLE IF NOT EXISTS wb_sessoes_whatsapp (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    telefone VARCHAR(30) NOT NULL UNIQUE,
+    whatsapp_id VARCHAR(100),
+    nome_cliente VARCHAR(150),
+    estado VARCHAR(40) NOT NULL
+        CHECK (estado IN (
+            'aguardando_setor',
+            'aguardando_descricao'
+        )),
+    setor_id BIGINT REFERENCES wb_setores(id),
+    ultima_mensagem_id VARCHAR(150),
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_wb_sessoes_estado
+    ON wb_sessoes_whatsapp(estado);
+
+INSERT INTO wb_usuarios_sistema (nome, email, username, senha_hash, perfil, setor_id, ativo)
+('Matheus Prates', 'matheusprates@softclever.com.br', 'prates','321654', 'analista', 1, TRUE)
