@@ -25,53 +25,67 @@ async function listarPorUsuario(usuarioId, realizadas = false) {
 
   const resultado = await tarefas.query(
     `SELECT
-       t.id,
-       t.usuario_id,
-       t.titulo,
-       t.observacao,
-       t.data_prevista,
-       t.status,
-       t.criado_em,
-       t.atualizado_em,
-       COALESCE(
-         json_agg(
-           json_build_object(
-             'id', a.id,
-             'nome_original', a.nome_original,
-             'mime_type', a.mime_type,
-             'tamanho', a.tamanho
-           )
-           ORDER BY a.id
-         ) FILTER (WHERE a.id IS NOT NULL),
-         '[]'::json
-       ) AS anexos
-     FROM wb_tarefas t
-     LEFT JOIN wb_tarefas_anexos a
-       ON a.tarefa_id = t.id
-     WHERE t.usuario_id = $1
-       AND t.status = $2
-     GROUP BY t.id
-     ORDER BY t.criado_em DESC, t.id DESC`,
+   t.id,
+   t.usuario_id,
+   t.empresa_id,
+   t.titulo,
+   t.observacao,
+   t.data_prevista,
+   t.status,
+   t.criado_em,
+   t.atualizado_em,
+   COALESCE(
+     json_agg(
+       json_build_object(
+         'id', a.id,
+         'nome_original', a.nome_original,
+         'mime_type', a.mime_type,
+         'tamanho', a.tamanho
+       )
+       ORDER BY a.id
+     ) FILTER (WHERE a.id IS NOT NULL),
+     '[]'::json
+   ) AS anexos
+ FROM wb_tarefas t
+ LEFT JOIN wb_tarefas_anexos a
+   ON a.tarefa_id = t.id
+ WHERE t.usuario_id = $1
+   AND t.status = $2
+ GROUP BY t.id
+ ORDER BY t.criado_em DESC, t.id DESC`,
     [id, status]
   );
 
   return resultado.rows;
 }
 
-async function criar({ usuarioId, titulo, observacao, dataPrevista }) {
+async function criar({
+  usuarioId,
+  empresaId,
+  titulo,
+  observacao,
+  dataPrevista
+}) {
   const id = validarId(usuarioId, "USUARIO_ID");
 
   const resultado = await tarefas.query(
     `INSERT INTO wb_tarefas (
        usuario_id,
+       empresa_id,
        titulo,
        observacao,
        data_prevista,
        status
      )
-     VALUES ($1, $2, $3, $4, 'em_digitacao')
+     VALUES ($1, $2, $3, $4, $5, 'em_digitacao')
      RETURNING *`,
-    [id, titulo, observacao, dataPrevista || null]
+    [
+      id,
+      empresaId || null,
+      titulo,
+      observacao,
+      dataPrevista || null
+    ]
   );
 
   return resultado.rows[0];
@@ -96,6 +110,7 @@ async function buscar(id, usuarioId) {
 async function atualizar({
   id,
   usuarioId,
+  empresaId,
   titulo,
   observacao,
   dataPrevista
@@ -105,15 +120,23 @@ async function atualizar({
 
   const resultado = await tarefas.query(
     `UPDATE wb_tarefas
-        SET titulo = $3,
-            observacao = $4,
-            data_prevista = $5,
+        SET empresa_id = $3,
+            titulo = $4,
+            observacao = $5,
+            data_prevista = $6,
             atualizado_em = CURRENT_TIMESTAMP
       WHERE id = $1
         AND usuario_id = $2
         AND status = 'em_digitacao'
       RETURNING *`,
-    [tarefaId, usuario, titulo, observacao, dataPrevista || null]
+    [
+      tarefaId,
+      usuario,
+      empresaId || null,
+      titulo,
+      observacao,
+      dataPrevista || null
+    ]
   );
 
   return resultado.rows[0] || null;

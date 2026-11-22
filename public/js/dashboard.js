@@ -1129,22 +1129,99 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
 // Tarefas pessoais: acesso restrito ao usuário autenticado.
 const modalCriarTarefa = document.getElementById("modal-criar-tarefa"), formCriarTarefa = document.getElementById("form-criar-tarefa");
 const tarefasContainer = document.getElementById("tarefas-lista"), campoTituloTarefa = document.getElementById("tarefa-titulo"), campoObservacaoTarefa = document.getElementById("tarefa-observacao"), campoDataTarefa = document.getElementById("tarefa-data"), mensagemTarefa = document.getElementById("tarefa-mensagem");
+const campoEmpresaTarefa = document.getElementById("tarefa-empresa");
 let tarefaEmEdicao = null, tarefaSelecionada = null, modoTarefasRealizadas = false;
 function formatarDataTarefa(data) { if (!data) return "Sem data prevista"; const p = String(data).slice(0, 10).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(data); }
+
 async function carregarTarefas() {
-  tarefasContainer.innerHTML = '<p class="tarefas-vazio">Carregando tarefas...</p>';
+  tarefasContainer.replaceChildren(
+    criarElemento("p", "Carregando tarefas...", "tarefas-vazio")
+  );
+
   try {
-    const r = await API.get(modoTarefasRealizadas ? "/api/tarefas/realizadas" : "/api/tarefas"); const tarefas = r.tarefas || [];
-    tarefasContainer.className = modoVisualizacaoTarefas === "quadros" ? "tarefas-grid" : "tarefas-lista-modo"; tarefasContainer.replaceChildren();
-    if (!tarefas.length) { tarefasContainer.append(criarElemento("p", modoTarefasRealizadas ? "Nenhuma tarefa realizada." : "Você ainda não possui tarefas.", "tarefas-vazio")); return; }
-    tarefas.forEach(t => {
-      const card = document.createElement("article"); card.className = "tarefa-card"; card.tabIndex = 0; card.setAttribute("role", "button");
-      const h = document.createElement("h3"); h.textContent = t.titulo; const p = document.createElement("p"); p.className = "tarefa-observacao"; p.textContent = t.observacao;
-      const d = document.createElement("span"); d.className = "tarefa-data"; d.textContent = `◷ ${formatarDataTarefa(t.data_prevista)}`;
-      card.append(h, p, d); const open = () => abrirDetalheTarefa(t); card.addEventListener("click", open); card.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }); tarefasContainer.append(card);
+    const r = await API.get(
+      modoTarefasRealizadas
+        ? "/api/tarefas/realizadas"
+        : "/api/tarefas"
+    );
+
+    const tarefas = Array.isArray(r.tarefas) ? r.tarefas : [];
+
+    tarefasContainer.className =
+      modoVisualizacaoTarefas === "quadros"
+        ? "tarefas-grid"
+        : "tarefas-lista-modo";
+
+    tarefasContainer.replaceChildren();
+
+    if (!tarefas.length) {
+      tarefasContainer.append(
+        criarElemento(
+          "p",
+          modoTarefasRealizadas
+            ? "Nenhuma tarefa realizada."
+            : "Você ainda não possui tarefas.",
+          "tarefas-vazio"
+        )
+      );
+      return;
+    }
+
+    tarefas.forEach((t) => {
+      const card = document.createElement("article");
+      card.className = "tarefa-card";
+      card.tabIndex = 0;
+      card.setAttribute("role", "button");
+
+      const h = document.createElement("h3");
+      h.textContent = t.titulo;
+
+      const p = document.createElement("p");
+      p.className = "tarefa-observacao";
+      p.textContent = t.observacao;
+
+      const d = document.createElement("span");
+      d.className = "tarefa-data";
+      d.textContent = `◷ ${formatarDataTarefa(t.data_prevista)}`;
+
+      card.append(h, p, d);
+
+      if (t.empresa) {
+        const empresa = document.createElement("span");
+        empresa.className = "tarefa-data";
+        empresa.textContent =
+          `Empresa: ${t.empresa.nome_fantasia || t.empresa.razao_social}`;
+
+        card.append(empresa);
+      }
+
+      // Abre os detalhes da tarefa.
+      const abrir = () => abrirDetalheTarefa(t);
+
+      card.addEventListener("click", abrir);
+
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          abrir();
+        }
+      });
+
+      // Insere o card na lista.
+      tarefasContainer.append(card);
     });
-  } catch (e) { tarefasContainer.textContent = e.message || "Erro ao carregar tarefas."; }
+
+  } catch (e) {
+    tarefasContainer.replaceChildren(
+      criarElemento(
+        "p",
+        e.message || "Erro ao carregar tarefas.",
+        "error-message"
+      )
+    );
+  }
 }
+
 const modalDetalheTarefa = document.getElementById("modal-detalhe-tarefa");
 function formatarTamanhoAnexo(bytes) {
   const tamanho = Number(bytes) || 0;
@@ -1231,6 +1308,11 @@ async function removerAnexoTarefa(anexo) {
 function abrirDetalheTarefa(t) {
   tarefaSelecionada = t;
   document.getElementById("detalhe-tarefa-titulo").textContent = t.titulo;
+  const empresaDetalhe = document.getElementById("detalhe-tarefa-empresa");
+
+  empresaDetalhe.textContent = t.empresa
+    ? `Empresa: ${t.empresa.nome_fantasia || t.empresa.razao_social} — CNPJ: ${t.empresa.cnpj}`
+    : "Nenhuma empresa vinculada";
   document.getElementById("detalhe-tarefa-observacao").textContent = t.observacao;
   document.getElementById("detalhe-tarefa-data").textContent = `◷ ${formatarDataTarefa(t.data_prevista)}`;
   renderizarAnexosTarefa(t);
@@ -1240,14 +1322,45 @@ function abrirDetalheTarefa(t) {
   modalDetalheTarefa.hidden = false;
 }
 document.getElementById("fechar-detalhe-tarefa")?.addEventListener("click", () => modalDetalheTarefa.hidden = true);
-function abrirModalCriarTarefa(t = null) {
-  tarefaEmEdicao = t?.id || null; formCriarTarefa.reset(); mensagemTarefa.textContent = "";
-  document.getElementById("modal-tarefa-titulo").textContent = t ? "Editar tarefa" : "Criar tarefa";
-  document.getElementById("salvar-tarefa").textContent = t ? "Salvar alterações" : "Salvar tarefa";
-  if (t) { campoTituloTarefa.value = t.titulo; campoObservacaoTarefa.value = t.observacao; campoDataTarefa.value = t.data_prevista ? String(t.data_prevista).slice(0, 10) : ""; }
-  document.getElementById("tarefa-contador").textContent = `${campoTituloTarefa.value.length}/64 caracteres`;
-  modalCriarTarefa.hidden = false; campoTituloTarefa.focus();
+
+async function abrirModalCriarTarefa(t = null) {
+  tarefaEmEdicao = t?.id || null;
+  formCriarTarefa.reset();
+  mensagemTarefa.textContent = "";
+
+  document.getElementById("modal-tarefa-titulo").textContent =
+    t ? "Editar tarefa" : "Criar tarefa";
+
+  document.getElementById("salvar-tarefa").textContent =
+    t ? "Salvar alterações" : "Salvar tarefa";
+
+  try {
+    await carregarEmpresasTarefa(t?.empresa_id || "");
+  } catch (erro) {
+    mensagemTarefa.textContent =
+      erro.message || "Não foi possível carregar as empresas cadastradas.";
+    return;
+  }
+
+  if (t) {
+    campoTituloTarefa.value = t.titulo;
+    campoObservacaoTarefa.value = t.observacao;
+    campoDataTarefa.value = t.data_prevista
+      ? String(t.data_prevista).slice(0, 10)
+      : "";
+
+    campoEmpresaTarefa.value = t.empresa_id
+      ? String(t.empresa_id)
+      : "";
+  }
+
+  document.getElementById("tarefa-contador").textContent =
+    `${campoTituloTarefa.value.length}/64 caracteres`;
+
+  modalCriarTarefa.hidden = false;
+  campoTituloTarefa.focus();
 }
+
 function fecharModalCriarTarefa() { modalCriarTarefa.hidden = true; tarefaEmEdicao = null; }
 document.getElementById("criar-tarefa")?.addEventListener("click", () => abrirModalCriarTarefa());
 document.getElementById("fechar-modal-tarefa")?.addEventListener("click", fecharModalCriarTarefa);
@@ -1258,7 +1371,12 @@ formCriarTarefa?.addEventListener("submit", async e => {
   if (!titulo || !observacao || titulo.length > 64) { mensagemTarefa.textContent = "Título e observação são obrigatórios; o título aceita até 64 caracteres."; return; }
   const btn = document.getElementById("salvar-tarefa"); btn.disabled = true;
   try {
-    const payload = { titulo, observacao, dataPrevista: campoDataTarefa.value || null };
+    const payload = {
+      titulo,
+      observacao,
+      dataPrevista: campoDataTarefa.value || null,
+      empresaId: campoEmpresaTarefa.value || null
+    };
     let resultado;
     if (tarefaEmEdicao) resultado = await API.patch(`/api/tarefas/${tarefaEmEdicao}`, payload); else resultado = await API.post("/api/tarefas", payload);
     const id = tarefaEmEdicao || resultado.tarefa.id;
@@ -1357,7 +1475,31 @@ function iniciarAtualizacoesTempoReal() {
     }
   });
 }
+async function carregarEmpresasTarefa(empresaSelecionada = "") {
+  campoEmpresaTarefa.innerHTML = "";
 
+  const opcaoPadrao = document.createElement("option");
+  opcaoPadrao.value = "";
+  opcaoPadrao.textContent = "Nenhuma empresa vinculada";
+  campoEmpresaTarefa.append(opcaoPadrao);
+
+  const resposta = await API.get("/api/tarefas/clientes");
+  const empresas = resposta.empresas || [];
+
+  empresas.forEach(empresa => {
+    const opcao = document.createElement("option");
+    opcao.value = empresa.id;
+
+    const nome = empresa.nome_fantasia || empresa.razao_social;
+    opcao.textContent = `${nome} — CNPJ: ${empresa.cnpj}`;
+
+    campoEmpresaTarefa.append(opcao);
+  });
+
+  campoEmpresaTarefa.value = empresaSelecionada
+    ? String(empresaSelecionada)
+    : "";
+}
 
 const modalAbrirAtendimento = document.getElementById("modal-abrir-atendimento");
 const formAbrirAtendimento = document.getElementById("form-abrir-atendimento");

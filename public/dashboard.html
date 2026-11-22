@@ -19,31 +19,57 @@
 
       <nav>
         <button class="nav-button active" data-view="inicio">
-          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Início
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="9" />
+            <rect x="14" y="3" width="7" height="5" />
+            <rect x="14" y="12" width="7" height="9" />
+            <rect x="3" y="16" width="7" height="5" />
+          </svg> Início
         </button>
 
         <button class="nav-button" data-view="fila">
-          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16l2 11v4H2v-4L4 4Z"/><path d="M2 15h6l2 3h4l2-3h6"/></svg> Fila de atendimentos
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 4h16l2 11v4H2v-4L4 4Z" />
+            <path d="M2 15h6l2 3h4l2-3h6" />
+          </svg> Fila de atendimentos
         </button>
 
         <button class="nav-button" data-view="meus">
-          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13v-2a9 9 0 0 1 18 0v2"/><rect x="3" y="12" width="5" height="8" rx="2"/><rect x="16" y="12" width="5" height="8" rx="2"/><path d="M21 19a4 4 0 0 1-4 3h-3"/></svg> Meus atendimentos
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 13v-2a9 9 0 0 1 18 0v2" />
+            <rect x="3" y="12" width="5" height="8" rx="2" />
+            <rect x="16" y="12" width="5" height="8" rx="2" />
+            <path d="M21 19a4 4 0 0 1-4 3h-3" />
+          </svg> Meus atendimentos
         </button>
 
         <button class="nav-button" data-view="tarefas">
-          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6M9 10h6M9 14h6M9 18h3"/></svg> Tarefas
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5" y="4" width="14" height="17" rx="2" />
+            <path d="M9 4h6M9 10h6M9 14h6M9 18h3" />
+          </svg> Tarefas
         </button>
 
         <button class="nav-button" data-view="usuarios" id="nav-usuarios" hidden>
-          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Gerenciar usuários
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg> Gerenciar usuários
         </button>
 
         <button class="nav-button" data-view="historico" id="nav-historico" hidden>
-          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg> Histórico de atendimentos
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+            <path d="M3 3v5h5M12 7v5l3 2" />
+          </svg> Histórico de atendimentos
         </button>
 
         <button class="nav-button" data-view="logs" id="nav-logs" hidden>
-          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg> Tabela de Logs
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+            <path d="M14 2v6h6M8 13h8M8 17h8" />
+          </svg> Tabela de Logs
         </button>
 
         <div class="sidebar-footer">
@@ -183,7 +209,8 @@
       <section id="tarefas-section" class="tarefas-section" hidden>
         <div class="tarefas-toolbar">
           <div class="tarefas-visualizacao" role="group" aria-label="Visualização das tarefas">
-            <button type="button" id="tarefas-modo-quadros" class="secondary-button active" aria-pressed="true">Quadros</button>
+            <button type="button" id="tarefas-modo-quadros" class="secondary-button active"
+              aria-pressed="true">Quadros</button>
             <button type="button" id="tarefas-modo-lista" class="secondary-button" aria-pressed="false">Lista</button>
           </div>
           <button type="button" id="ver-tarefas-realizadas" class="secondary-button">Tarefas realizadas</button>
@@ -535,16 +562,22 @@
       <h2 id="modal-tarefa-titulo">Criar tarefa</h2>
       <form id="form-criar-tarefa">
         <label for="tarefa-titulo">Título</label>
-        <input id="tarefa-titulo" name="titulo" type="text" maxlength="64" required placeholder="Digite o título da tarefa">
+        <input id="tarefa-titulo" name="titulo" type="text" maxlength="64" required
+          placeholder="Digite o título da tarefa">
         <small id="tarefa-contador">0/64 caracteres</small>
-
+        <label for="tarefa-empresa">Cliente / Empresa (opcional)</label>
+        <select id="tarefa-empresa" name="empresaId">
+          <option value="">Nenhuma empresa vinculada</option>
+        </select>
         <label for="tarefa-observacao">Observação</label>
-        <textarea id="tarefa-observacao" name="observacao" rows="5" required placeholder="Descreva os detalhes ou lembretes da tarefa"></textarea>
+        <textarea id="tarefa-observacao" name="observacao" rows="5" required
+          placeholder="Descreva os detalhes ou lembretes da tarefa"></textarea>
 
         <label for="tarefa-data">Data prevista (opcional)</label>
         <input id="tarefa-data" name="dataPrevista" type="date">
         <label for="tarefa-anexos">Anexos (PDF, JPG, JPEG ou PNG; até 50 MB por arquivo)</label>
-        <input id="tarefa-anexos" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple>
+        <input id="tarefa-anexos" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+          multiple>
         <p id="tarefa-mensagem" role="status" aria-live="polite"></p>
         <div class="modal-acoes">
           <button type="button" id="cancelar-tarefa" class="secondary-button">Cancelar</button>
@@ -555,9 +588,11 @@
   </div>
 
   <div id="modal-detalhe-tarefa" class="modal-overlay" hidden>
-    <div class="modal-card modal-tarefa-detalhe" role="dialog" aria-modal="true" aria-labelledby="detalhe-tarefa-titulo">
+    <div class="modal-card modal-tarefa-detalhe" role="dialog" aria-modal="true"
+      aria-labelledby="detalhe-tarefa-titulo">
       <button type="button" id="fechar-detalhe-tarefa" class="modal-fechar" aria-label="Fechar">×</button>
       <h2 id="detalhe-tarefa-titulo"></h2>
+      <p id="detalhe-tarefa-empresa" class="tarefa-data"></p>
       <p id="detalhe-tarefa-observacao" class="detalhe-tarefa-observacao"></p>
       <p id="detalhe-tarefa-data" class="tarefa-data"></p>
       <div id="detalhe-tarefa-anexos"></div>

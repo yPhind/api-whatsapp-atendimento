@@ -1,47 +1,61 @@
-
+const empresaRepository = require("../repositories/empresaRepository");
 const fs = require("fs");
 const path = require("path");
 const repo = require("../repositories/tarefaRepository");
 
-function validar(dados = {}) {
-  const titulo = String(dados.titulo || "").trim();
-  const observacao = String(dados.observacao || "").trim();
-  const dataPrevista = dados.dataPrevista || null;
+function dataValida(data) {
+  if (!data) return true;
 
-  if (!titulo) {
-    throw new Error("TITULO_OBRIGATORIO");
+  if (
+    typeof data !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(data)
+  ) {
+    return false;
   }
 
-  if (titulo.length > 64) {
-    throw new Error("TITULO_MUITO_LONGO");
-  }
+  const convertida = new Date(`${data}T00:00:00Z`);
 
-  if (!observacao) {
-    throw new Error("OBSERVACAO_OBRIGATORIA");
-  }
+  return (
+    !Number.isNaN(convertida.getTime()) &&
+    convertida.toISOString().slice(0, 10) === data
+  );
+}
 
-  if (dataPrevista !== null) {
-    if (
-      typeof dataPrevista !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(dataPrevista)
-    ) {
-      throw new Error("DATA_PREVISTA_INVALIDA");
+function validar(body = {}) {
+  const titulo = String(body.titulo || "").trim();
+  const observacao = String(body.observacao || "").trim();
+  const dataPrevista = body.dataPrevista || null;
+
+  let empresaId = null;
+
+  if (
+    body.empresaId !== undefined &&
+    body.empresaId !== null &&
+    body.empresaId !== ""
+  ) {
+    empresaId = Number(body.empresaId);
+
+    if (!Number.isSafeInteger(empresaId) || empresaId <= 0) {
+      throw erroHttp("Empresa selecionada inválida.");
     }
+  }
 
-    const data = new Date(`${dataPrevista}T00:00:00`);
-
-    if (
-      Number.isNaN(data.getTime()) ||
-      data.toISOString().slice(0, 10) !== dataPrevista
-    ) {
-      throw new Error("DATA_PREVISTA_INVALIDA");
-    }
+  if (
+    !titulo ||
+    titulo.length > 64 ||
+    !observacao ||
+    !dataValida(dataPrevista)
+  ) {
+    throw erroHttp(
+      "Confira o título, a observação e a data prevista."
+    );
   }
 
   return {
     titulo,
     observacao,
-    dataPrevista
+    dataPrevista,
+    empresaId
   };
 }
 
@@ -100,6 +114,62 @@ function obterIdParametro(valor, nome) {
   return id;
 }
 
+async function validarEmpresa(empresaId) {
+  if (!empresaId) return null;
+
+  const empresa = await empresaRepository.buscarPorId(empresaId);
+
+  if (!empresa || empresa.status !== "Ativa") {
+    throw erroHttp(
+      "A empresa selecionada não existe ou está inativa."
+    );
+  }
+
+  return empresa.id;
+}
+
+async function incluirDadosEmpresas(tarefas) {
+  if (!tarefas.length) return tarefas;
+
+  const ids = [
+    ...new Set(
+      tarefas
+        .map(t => t.empresa_id)
+        .filter(id => id !== null && id !== undefined)
+        .map(Number)
+    )
+  ];
+
+  if (!ids.length) {
+    return tarefas.map(t => ({
+      ...t,
+      empresa: null
+    }));
+  }
+
+  const empresas = await empresaRepository.buscarPorIds(ids);
+
+  const empresasPorId = new Map(
+    empresas.map(empresa => [String(empresa.id), empresa])
+  );
+
+  return tarefas.map(t => ({
+    ...t,
+    empresa: t.empresa_id
+      ? empresasPorId.get(String(t.empresa_id)) || null
+      : null
+  }));
+}
+
+async function listarEmpresas(req, res, next) {
+  try {
+    const empresas = await empresaRepository.listarAtivas();
+    res.json({ empresas });
+  } catch (erro) {
+    next(erro);
+  }
+}
+
 async function listar(req, res, next) {
   try {
     const usuarioId = obterUsuarioId(req);
@@ -109,7 +179,9 @@ async function listar(req, res, next) {
       false
     );
 
-    res.json({ tarefas });
+    const tarefasComEmpresas = await incluirDadosEmpresas(tarefas);
+
+    res.json({ tarefas: tarefasComEmpresas });
   } catch (erro) {
     next(erro);
   }
@@ -124,7 +196,9 @@ async function realizadas(req, res, next) {
       true
     );
 
-    res.json({ tarefas });
+    const tarefasComEmpresas = await incluirDadosEmpresas(tarefas);
+
+    res.json({ tarefas: tarefasComEmpresas });
   } catch (erro) {
     next(erro);
   }
@@ -134,7 +208,7 @@ async function criar(req, res, next) {
   try {
     const usuarioId = obterUsuarioId(req);
     const dados = validar(req.body);
-
+    dados.empresaId = await validarEmpresa(dados.empresaId);
     const tarefa = await repo.criar({
       usuarioId,
       ...dados
@@ -151,7 +225,7 @@ async function atualizar(req, res, next) {
     const usuarioId = obterUsuarioId(req);
     const id = obterIdParametro(req.params.id, "Tarefa");
     const dados = validar(req.body);
-
+    dados.empresaId = await validarEmpresa(dados.empresaId);
     const tarefa = await repo.atualizar({
       id,
       usuarioId,
@@ -394,6 +468,7 @@ async function removerAnexo(req, res, next) {
 module.exports = {
   listar,
   realizadas,
+  listarEmpresas,
   criar,
   atualizar,
   finalizar,

@@ -116,6 +116,8 @@ router.use(auth);
 router.use(perfis("analista", "supervisor"));
 
 // Consultas e gerenciamento de tarefas.
+router.get("/clientes", controller.listarEmpresas);
+
 router.get("/", controller.listar);
 router.get("/realizadas", controller.realizadas);
 
