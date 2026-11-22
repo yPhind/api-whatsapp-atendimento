@@ -1,89 +1,274 @@
+
 const { tarefas } = require("../config/database");
 
+const STATUS_VALIDOS = ["em_digitacao", "realizada"];
+
+function validarId(valor, campo = "ID") {
+  const id = Number(valor);
+
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error(`${campo}_INVALIDO`);
+  }
+
+  return id;
+}
+
+function validarStatus(status) {
+  if (!STATUS_VALIDOS.includes(status)) {
+    throw new Error("STATUS_TAREFA_INVALIDO");
+  }
+}
+
 async function listarPorUsuario(usuarioId, realizadas = false) {
+  const id = validarId(usuarioId, "USUARIO_ID");
+  const status = realizadas ? "realizada" : "em_digitacao";
+
   const resultado = await tarefas.query(
-    `SELECT t.id, t.titulo, t.observacao, t.data_prevista, t.criado_em, t.status,
-            COALESCE(
-              json_agg(json_build_object('id', a.id, 'nome_original', a.nome_original,
-                'mime_type', a.mime_type, 'tamanho', a.tamanho))
-                FILTER (WHERE a.id IS NOT NULL), '[]'
-            ) AS anexos
-       FROM wb_tarefas t
-       LEFT JOIN wb_tarefas_anexos a ON a.tarefa_id = t.id
-      WHERE t.usuario_id = $1 AND t.status = $2
-      GROUP BY t.id
-      ORDER BY t.criado_em DESC, t.id DESC`,
-    [usuarioId, realizadas ? "realizada" : "em_digitacao"]
+    `SELECT
+       t.id,
+       t.usuario_id,
+       t.titulo,
+       t.observacao,
+       t.data_prevista,
+       t.status,
+       t.criado_em,
+       t.atualizado_em,
+       COALESCE(
+         json_agg(
+           json_build_object(
+             'id', a.id,
+             'nome_original', a.nome_original,
+             'mime_type', a.mime_type,
+             'tamanho', a.tamanho
+           )
+           ORDER BY a.id
+         ) FILTER (WHERE a.id IS NOT NULL),
+         '[]'::json
+       ) AS anexos
+     FROM wb_tarefas t
+     LEFT JOIN wb_tarefas_anexos a
+       ON a.tarefa_id = t.id
+     WHERE t.usuario_id = $1
+       AND t.status = $2
+     GROUP BY t.id
+     ORDER BY t.criado_em DESC, t.id DESC`,
+    [id, status]
   );
+
   return resultado.rows;
 }
+
 async function criar({ usuarioId, titulo, observacao, dataPrevista }) {
+  const id = validarId(usuarioId, "USUARIO_ID");
+
   const resultado = await tarefas.query(
-    `INSERT INTO wb_tarefas (usuario_id, titulo, observacao, data_prevista, status)
-     VALUES ($1, $2, $3, $4, 'em_digitacao') RETURNING *`,
-    [usuarioId, titulo, observacao, dataPrevista]
+    `INSERT INTO wb_tarefas (
+       usuario_id,
+       titulo,
+       observacao,
+       data_prevista,
+       status
+     )
+     VALUES ($1, $2, $3, $4, 'em_digitacao')
+     RETURNING *`,
+    [id, titulo, observacao, dataPrevista || null]
   );
+
   return resultado.rows[0];
 }
+
 async function buscar(id, usuarioId) {
+  const tarefaId = validarId(id, "TAREFA_ID");
+  const usuario = validarId(usuarioId, "USUARIO_ID");
+
   const resultado = await tarefas.query(
-    "SELECT * FROM wb_tarefas WHERE id = $1 AND usuario_id = $2", [id, usuarioId]
+    `SELECT *
+       FROM wb_tarefas
+      WHERE id = $1
+        AND usuario_id = $2
+      LIMIT 1`,
+    [tarefaId, usuario]
   );
+
   return resultado.rows[0] || null;
 }
-async function atualizar({ id, usuarioId, titulo, observacao, dataPrevista }) {
+
+async function atualizar({
+  id,
+  usuarioId,
+  titulo,
+  observacao,
+  dataPrevista
+}) {
+  const tarefaId = validarId(id, "TAREFA_ID");
+  const usuario = validarId(usuarioId, "USUARIO_ID");
+
   const resultado = await tarefas.query(
-    `UPDATE wb_tarefas SET titulo = $3, observacao = $4, data_prevista = $5, atualizado_em = NOW()
-      WHERE id = $1 AND usuario_id = $2 AND status = 'em_digitacao' RETURNING *`,
-    [id, usuarioId, titulo, observacao, dataPrevista]
+    `UPDATE wb_tarefas
+        SET titulo = $3,
+            observacao = $4,
+            data_prevista = $5,
+            atualizado_em = CURRENT_TIMESTAMP
+      WHERE id = $1
+        AND usuario_id = $2
+        AND status = 'em_digitacao'
+      RETURNING *`,
+    [tarefaId, usuario, titulo, observacao, dataPrevista || null]
   );
+
   return resultado.rows[0] || null;
 }
+
 async function alterarStatus(id, usuarioId, status) {
+  const tarefaId = validarId(id, "TAREFA_ID");
+  const usuario = validarId(usuarioId, "USUARIO_ID");
+
+  validarStatus(status);
+
   const resultado = await tarefas.query(
-    "UPDATE wb_tarefas SET status = $3, atualizado_em = NOW() WHERE id = $1 AND usuario_id = $2 RETURNING *",
-    [id, usuarioId, status]
+    `UPDATE wb_tarefas
+        SET status = $3,
+            atualizado_em = CURRENT_TIMESTAMP
+      WHERE id = $1
+        AND usuario_id = $2
+      RETURNING *`,
+    [tarefaId, usuario, status]
   );
+
   return resultado.rows[0] || null;
 }
-async function adicionarAnexos({ tarefaId, arquivos }) {
+
+async function adicionarAnexos({ tarefaId, usuarioId, arquivos }) {
+  const id = validarId(tarefaId, "TAREFA_ID");
+  const usuario = validarId(usuarioId, "USUARIO_ID");
+
+  if (!Array.isArray(arquivos) || arquivos.length === 0) {
+    throw new Error("ARQUIVOS_OBRIGATORIOS");
+  }
+
   const client = await tarefas.connect();
+  let transacaoIniciada = false;
+
   try {
     await client.query("BEGIN");
+    transacaoIniciada = true;
+
+    // Bloqueia a tarefa durante a operação para impedir
+    // alterações concorrentes de situação.
+    const tarefa = await client.query(
+      `SELECT id
+         FROM wb_tarefas
+        WHERE id = $1
+          AND usuario_id = $2
+          AND status = 'em_digitacao'
+        FOR UPDATE`,
+      [id, usuario]
+    );
+
+    if (tarefa.rowCount === 0) {
+      throw new Error("TAREFA_NAO_ENCONTRADA_OU_FINALIZADA");
+    }
+
     const anexos = [];
+
     for (const arquivo of arquivos) {
+      if (
+        !arquivo ||
+        !arquivo.originalname ||
+        !arquivo.filename ||
+        !arquivo.mimetype ||
+        !Number.isInteger(arquivo.size) ||
+        arquivo.size < 0
+      ) {
+        throw new Error("DADOS_ANEXO_INVALIDOS");
+      }
+
       const resultado = await client.query(
-        `INSERT INTO wb_tarefas_anexos (tarefa_id, nome_original, nome_arquivo, mime_type, tamanho)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [tarefaId, arquivo.originalname, arquivo.filename, arquivo.mimetype, arquivo.size]
+        `INSERT INTO wb_tarefas_anexos (
+           tarefa_id,
+           nome_original,
+           nome_arquivo,
+           mime_type,
+           tamanho
+         )
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          id,
+          arquivo.originalname,
+          arquivo.filename,
+          arquivo.mimetype,
+          arquivo.size
+        ]
       );
+
       anexos.push(resultado.rows[0]);
     }
+
     await client.query("COMMIT");
+    transacaoIniciada = false;
+
     return anexos;
   } catch (erro) {
-    await client.query("ROLLBACK");
+    if (transacaoIniciada) {
+      try {
+        await client.query("ROLLBACK");
+      } catch (erroRollback) {
+        console.error(
+          "[TAREFA REPOSITORY] Falha no rollback:",
+          erroRollback.message
+        );
+      }
+    }
+
     throw erro;
   } finally {
     client.release();
   }
 }
+
 async function buscarAnexo(id, usuarioId) {
+  const anexoId = validarId(id, "ANEXO_ID");
+  const usuario = validarId(usuarioId, "USUARIO_ID");
+
   const resultado = await tarefas.query(
-    `SELECT a.* FROM wb_tarefas_anexos a
-      JOIN wb_tarefas t ON t.id = a.tarefa_id
-      WHERE a.id = $1 AND t.usuario_id = $2`,
-    [id, usuarioId]
+    `SELECT a.*
+       FROM wb_tarefas_anexos a
+       INNER JOIN wb_tarefas t
+         ON t.id = a.tarefa_id
+      WHERE a.id = $1
+        AND t.usuario_id = $2
+      LIMIT 1`,
+    [anexoId, usuario]
   );
+
   return resultado.rows[0] || null;
 }
+
 async function removerAnexo(id, usuarioId) {
+  const anexoId = validarId(id, "ANEXO_ID");
+  const usuario = validarId(usuarioId, "USUARIO_ID");
+
   const resultado = await tarefas.query(
-    `DELETE FROM wb_tarefas_anexos a USING wb_tarefas t
-      WHERE a.tarefa_id = t.id AND a.id = $1 AND t.usuario_id = $2
-      RETURNING a.*`,
-    [id, usuarioId]
+    `DELETE FROM wb_tarefas_anexos a
+     USING wb_tarefas t
+     WHERE a.tarefa_id = t.id
+       AND a.id = $1
+       AND t.usuario_id = $2
+     RETURNING a.*`,
+    [anexoId, usuario]
   );
+
   return resultado.rows[0] || null;
 }
-module.exports = { listarPorUsuario, criar, buscar, atualizar, alterarStatus, adicionarAnexos, buscarAnexo, removerAnexo };
+
+module.exports = {
+  listarPorUsuario,
+  criar,
+  buscar,
+  atualizar,
+  alterarStatus,
+  adicionarAnexos,
+  buscarAnexo,
+  removerAnexo
+};

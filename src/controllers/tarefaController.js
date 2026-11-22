@@ -1,17 +1,28 @@
 
 const fs = require("fs");
 const path = require("path");
-
 const repo = require("../repositories/tarefaRepository");
-const logService = require("../services/logService");
+
+const DIRETORIO_ANEXOS = path.resolve(
+  process.cwd(),
+  "storage",
+  "tarefas"
+);
+
+const TIPOS_PERMITIDOS = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png"
+];
+
+function erroHttp(mensagem, status = 400) {
+  return Object.assign(new Error(mensagem), { status });
+}
 
 function dataValida(data) {
   if (!data) return true;
 
-  if (
-    typeof data !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(data)
-  ) {
+  if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
     return false;
   }
 
@@ -23,7 +34,7 @@ function dataValida(data) {
   );
 }
 
-function validar(body) {
+function validar(body = {}) {
   const titulo = String(body.titulo || "").trim();
   const observacao = String(body.observacao || "").trim();
   const dataPrevista = body.dataPrevista || null;
@@ -34,9 +45,8 @@ function validar(body) {
     !observacao ||
     !dataValida(dataPrevista)
   ) {
-    throw Object.assign(
-      new Error("Confira título, observação e data prevista."),
-      { status: 400 }
+    throw erroHttp(
+      "Confira o título, a observação e a data prevista."
     );
   }
 
@@ -49,35 +59,49 @@ function validar(body) {
 
 async function limparArquivos(files = []) {
   await Promise.all(
-    files.map(file =>
-      fs.promises.unlink(file.path).catch(() => {})
-    )
+    files.map(async (file) => {
+      if (!file?.path) return;
+
+      try {
+        await fs.promises.unlink(file.path);
+      } catch (erro) {
+        if (erro.code !== "ENOENT") {
+          console.error(
+            "[TAREFAS] Falha ao limpar arquivo temporário:",
+            erro.message
+          );
+        }
+      }
+    })
   );
 }
 
-async function registrarAuditoria({
-  usuarioId,
-  evento,
-  mensagem,
-  tarefaId = null,
-  contexto = {}
-}) {
-  await logService.info({
-    origem: "tarefaController",
-    evento,
-    mensagem,
-    usuario_sistema_id: usuarioId,
-    contexto: {
-      tarefa_id: tarefaId,
-      ...contexto
-    }
-  });
+function obterUsuarioId(req) {
+  const usuarioId = Number(req.usuarioSistema?.id);
+
+  if (!Number.isSafeInteger(usuarioId) || usuarioId <= 0) {
+    throw erroHttp("Usuário autenticado inválido.", 401);
+  }
+
+  return usuarioId;
+}
+
+function obterIdParametro(valor, nome) {
+  const id = Number(valor);
+
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw erroHttp(`${nome} inválido.`);
+  }
+
+  return id;
 }
 
 async function listar(req, res, next) {
   try {
+    const usuarioId = obterUsuarioId(req);
+
     const tarefas = await repo.listarPorUsuario(
-      req.usuarioSistema.id,
+      usuarioId,
       false
     );
 
@@ -89,8 +113,10 @@ async function listar(req, res, next) {
 
 async function realizadas(req, res, next) {
   try {
+    const usuarioId = obterUsuarioId(req);
+
     const tarefas = await repo.listarPorUsuario(
-      req.usuarioSistema.id,
+      usuarioId,
       true
     );
 
@@ -102,21 +128,12 @@ async function realizadas(req, res, next) {
 
 async function criar(req, res, next) {
   try {
+    const usuarioId = obterUsuarioId(req);
     const dados = validar(req.body);
 
     const tarefa = await repo.criar({
-      usuarioId: req.usuarioSistema.id,
+      usuarioId,
       ...dados
-    });
-
-    await registrarAuditoria({
-      usuarioId: req.usuarioSistema.id,
-      evento: "tarefa_criada",
-      mensagem: "Nova tarefa criada.",
-      tarefaId: tarefa.id,
-      contexto: {
-        data_prevista: tarefa.data_prevista || null
-      }
     });
 
     res.status(201).json({ tarefa });
@@ -127,11 +144,13 @@ async function criar(req, res, next) {
 
 async function atualizar(req, res, next) {
   try {
+    const id = obterIdParametro(req.params.id, "Tarefa");
+    const usuarioId = obterUsuarioId(req);
     const dados = validar(req.body);
 
     const tarefa = await repo.atualizar({
-      id: Number(req.params.id),
-      usuarioId: req.usuarioSistema.id,
+      id,
+      usuarioId,
       ...dados
     });
 
@@ -141,16 +160,6 @@ async function atualizar(req, res, next) {
       });
     }
 
-    await registrarAuditoria({
-      usuarioId: req.usuarioSistema.id,
-      evento: "tarefa_atualizada",
-      mensagem: "Dados de uma tarefa foram atualizados.",
-      tarefaId: tarefa.id,
-      contexto: {
-        data_prevista: tarefa.data_prevista || null
-      }
-    });
-
     res.json({ tarefa });
   } catch (erro) {
     next(erro);
@@ -159,9 +168,12 @@ async function atualizar(req, res, next) {
 
 async function finalizar(req, res, next) {
   try {
+    const id = obterIdParametro(req.params.id, "Tarefa");
+    const usuarioId = obterUsuarioId(req);
+
     const tarefa = await repo.alterarStatus(
-      Number(req.params.id),
-      req.usuarioSistema.id,
+      id,
+      usuarioId,
       "realizada"
     );
 
@@ -171,16 +183,6 @@ async function finalizar(req, res, next) {
       });
     }
 
-    await registrarAuditoria({
-      usuarioId: req.usuarioSistema.id,
-      evento: "tarefa_finalizada",
-      mensagem: "Tarefa marcada como realizada.",
-      tarefaId: tarefa.id,
-      contexto: {
-        status_novo: tarefa.status
-      }
-    });
-
     res.json({ tarefa });
   } catch (erro) {
     next(erro);
@@ -189,9 +191,12 @@ async function finalizar(req, res, next) {
 
 async function reabrir(req, res, next) {
   try {
+    const id = obterIdParametro(req.params.id, "Tarefa");
+    const usuarioId = obterUsuarioId(req);
+
     const tarefa = await repo.alterarStatus(
-      Number(req.params.id),
-      req.usuarioSistema.id,
+      id,
+      usuarioId,
       "em_digitacao"
     );
 
@@ -200,16 +205,6 @@ async function reabrir(req, res, next) {
         mensagem: "Tarefa não encontrada."
       });
     }
-
-    await registrarAuditoria({
-      usuarioId: req.usuarioSistema.id,
-      evento: "tarefa_reaberta",
-      mensagem: "Tarefa reaberta para edição.",
-      tarefaId: tarefa.id,
-      contexto: {
-        status_novo: tarefa.status
-      }
-    });
 
     res.json({ tarefa });
   } catch (erro) {
@@ -221,38 +216,31 @@ async function anexar(req, res, next) {
   const files = req.files || [];
 
   try {
-    const tarefa = await repo.buscar(
-      Number(req.params.id),
-      req.usuarioSistema.id
+    const tarefaId = obterIdParametro(
+      req.params.id,
+      "Tarefa"
     );
 
-    if (!tarefa || tarefa.status !== "em_digitacao") {
-      await limparArquivos(files);
+    const usuarioId = obterUsuarioId(req);
 
-      return res.status(404).json({
-        mensagem: "Tarefa não encontrada ou não está em digitação."
-      });
+    if (files.length === 0) {
+      throw erroHttp("Selecione pelo menos um arquivo.");
     }
 
-    // Registra todos os anexos em uma única transação.
-    const anexos = await repo.adicionarAnexos({
-      tarefaId: tarefa.id,
-      arquivos: files
-    });
-
-    await registrarAuditoria({
-      usuarioId: req.usuarioSistema.id,
-      evento: "tarefa_anexos_adicionados",
-      mensagem: "Arquivos anexados à tarefa.",
-      tarefaId: tarefa.id,
-      contexto: {
-        quantidade_anexos: anexos.length,
-        anexos: anexos.map(anexo => ({
-          anexo_id: anexo.id,
-          mime_type: anexo.mime_type,
-          tamanho: anexo.tamanho
-        }))
+    for (const file of files) {
+      if (!TIPOS_PERMITIDOS.includes(file.mimetype)) {
+        throw erroHttp(
+          "Tipo de arquivo não permitido. Utilize PDF, JPEG ou PNG."
+        );
       }
+    }
+
+    // A propriedade e a situação da tarefa são verificadas
+    // dentro da transação do repositório.
+    const anexos = await repo.adicionarAnexos({
+      tarefaId,
+      usuarioId,
+      arquivos: files
     });
 
     res.status(201).json({ anexos });
@@ -264,9 +252,16 @@ async function anexar(req, res, next) {
 
 async function baixarAnexo(req, res, next) {
   try {
+    const anexoId = obterIdParametro(
+      req.params.anexoId,
+      "Anexo"
+    );
+
+    const usuarioId = obterUsuarioId(req);
+
     const anexo = await repo.buscarAnexo(
-      Number(req.params.anexoId),
-      req.usuarioSistema.id
+      anexoId,
+      usuarioId
     );
 
     if (!anexo) {
@@ -276,23 +271,15 @@ async function baixarAnexo(req, res, next) {
     }
 
     const arquivo = path.join(
-      process.cwd(),
-      "storage",
-      "tarefas",
+      DIRETORIO_ANEXOS,
       path.basename(anexo.nome_arquivo)
     );
 
-    await registrarAuditoria({
-      usuarioId: req.usuarioSistema.id,
-      evento: "tarefa_anexo_baixado",
-      mensagem: "Anexo de tarefa solicitado para download.",
-      tarefaId: anexo.tarefa_id,
-      contexto: {
-        anexo_id: anexo.id
+    res.download(arquivo, anexo.nome_original, (erro) => {
+      if (erro && !res.headersSent) {
+        next(erro);
       }
     });
-
-    res.download(arquivo, anexo.nome_original);
   } catch (erro) {
     next(erro);
   }
@@ -300,9 +287,16 @@ async function baixarAnexo(req, res, next) {
 
 async function visualizarAnexo(req, res, next) {
   try {
+    const anexoId = obterIdParametro(
+      req.params.anexoId,
+      "Anexo"
+    );
+
+    const usuarioId = obterUsuarioId(req);
+
     const anexo = await repo.buscarAnexo(
-      Number(req.params.anexoId),
-      req.usuarioSistema.id
+      anexoId,
+      usuarioId
     );
 
     if (!anexo) {
@@ -311,51 +305,37 @@ async function visualizarAnexo(req, res, next) {
       });
     }
 
-    const arquivo = path.join(
-      process.cwd(),
-      "storage",
-      "tarefas",
-      path.basename(anexo.nome_arquivo)
-    );
-
-    if (!fs.existsSync(arquivo)) {
-      return res.status(404).json({
-        mensagem: "Arquivo não encontrado no armazenamento."
-      });
-    }
-
-    if (
-      ![
-        "application/pdf",
-        "image/jpeg",
-        "image/png"
-      ].includes(anexo.mime_type)
-    ) {
+    if (!TIPOS_PERMITIDOS.includes(anexo.mime_type)) {
       return res.status(415).json({
         mensagem: "Tipo de arquivo não permitido para visualização."
       });
     }
 
-    await registrarAuditoria({
-      usuarioId: req.usuarioSistema.id,
-      evento: "tarefa_anexo_visualizado",
-      mensagem: "Anexo de tarefa solicitado para visualização.",
-      tarefaId: anexo.tarefa_id,
-      contexto: {
-        anexo_id: anexo.id
-      }
-    });
+    const arquivo = path.join(
+      DIRETORIO_ANEXOS,
+      path.basename(anexo.nome_arquivo)
+    );
+
+    try {
+      await fs.promises.access(arquivo);
+    } catch {
+      return res.status(404).json({
+        mensagem: "Arquivo não encontrado no armazenamento."
+      });
+    }
 
     res.setHeader("Content-Type", anexo.mime_type);
-
     res.setHeader(
       "Content-Disposition",
       `inline; filename*=UTF-8''${encodeURIComponent(anexo.nome_original)}`
     );
-
     res.setHeader("X-Content-Type-Options", "nosniff");
 
-    res.sendFile(arquivo);
+    res.sendFile(arquivo, (erro) => {
+      if (erro && !res.headersSent) {
+        next(erro);
+      }
+    });
   } catch (erro) {
     next(erro);
   }
@@ -363,44 +343,41 @@ async function visualizarAnexo(req, res, next) {
 
 async function removerAnexo(req, res, next) {
   try {
-    const anexo = await repo.removerAnexo(
-      Number(req.params.anexoId),
-      req.usuarioSistema.id
+    const anexoId = obterIdParametro(
+      req.params.anexoId,
+      "Anexo"
     );
 
-    if (!anexo) {
+    const usuarioId = obterUsuarioId(req);
+
+    // Primeiro remove o registro, respeitando a propriedade.
+    const removido = await repo.removerAnexo(
+      anexoId,
+      usuarioId
+    );
+
+    if (!removido) {
       return res.status(404).json({
         mensagem: "Anexo não encontrado."
       });
     }
 
     const arquivo = path.join(
-      process.cwd(),
-      "storage",
-      "tarefas",
-      path.basename(anexo.nome_arquivo)
+      DIRETORIO_ANEXOS,
+      path.basename(removido.nome_arquivo)
     );
 
+    // A falha física não desfaz a exclusão já confirmada no banco.
     try {
       await fs.promises.unlink(arquivo);
     } catch (erroArquivo) {
       if (erroArquivo.code !== "ENOENT") {
         console.error(
-          "Erro ao remover arquivo:",
+          "[TAREFAS] Registro removido, mas houve falha ao excluir o arquivo:",
           erroArquivo.message
         );
       }
     }
-
-    await registrarAuditoria({
-      usuarioId: req.usuarioSistema.id,
-      evento: "tarefa_anexo_removido",
-      mensagem: "Anexo removido de uma tarefa.",
-      tarefaId: anexo.tarefa_id,
-      contexto: {
-        anexo_id: anexo.id
-      }
-    });
 
     res.json({
       mensagem: "Anexo removido com sucesso."
