@@ -209,17 +209,60 @@
       <section id="tarefas-section" class="tarefas-section" hidden>
         <div class="tarefas-toolbar">
           <div class="tarefas-visualizacao" role="group" aria-label="Visualização das tarefas">
-            <button type="button" id="tarefas-modo-quadros" class="secondary-button active"
-              aria-pressed="true">Quadros</button>
-            <button type="button" id="tarefas-modo-lista" class="secondary-button" aria-pressed="false">Lista</button>
+            <button type="button" id="tarefas-modo-quadros" class="secondary-button active" aria-pressed="true">
+              Quadros
+            </button>
+
+            <button type="button" id="tarefas-modo-lista" class="secondary-button" aria-pressed="false">
+              Lista
+            </button>
           </div>
-          <button type="button" id="ver-tarefas-realizadas" class="secondary-button">Tarefas realizadas</button>
-          <button type="button" id="criar-tarefa" class="primary-button">+ Criar tarefa</button>
+
+          <button type="button" id="ver-tarefas-realizadas" class="secondary-button">
+            Tarefas realizadas
+          </button>
+
+          <button type="button" id="criar-tarefa" class="primary-button">
+            + Criar tarefa
+          </button>
         </div>
+
+        <div id="tarefas-filtros" class="tarefas-filtros">
+          <div>
+            <label for="filtro-tarefa-cliente">Cliente</label>
+            <select id="filtro-tarefa-cliente">
+              <option value="">Todos os clientes</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="filtro-tarefa-data">Data prevista</label>
+            <input type="date" id="filtro-tarefa-data">
+          </div>
+
+          <div id="filtro-tarefa-analista-container" hidden>
+            <label for="filtro-tarefa-analista">Analista</label>
+            <select id="filtro-tarefa-analista">
+              <option value="">Todos os analistas</option>
+            </select>
+          </div>
+
+          <div class="tarefas-filtros-acoes">
+            <button type="button" id="aplicar-filtros-tarefas" class="secondary-button">
+              Aplicar filtros
+            </button>
+
+            <button type="button" id="limpar-filtros-tarefas" class="secondary-button">
+              Limpar
+            </button>
+          </div>
+        </div>
+
         <div id="tarefas-lista" class="tarefas-grid" aria-live="polite">
           <p>Carregando tarefas...</p>
         </div>
       </section>
+
 
       <section id="usuarios-section" class="tickets-section" hidden>
 
@@ -558,10 +601,10 @@
 
   <div id="modal-criar-tarefa" class="modal-overlay" hidden>
     <div class="modal-card modal-tarefa" role="dialog" aria-modal="true" aria-labelledby="modal-tarefa-titulo">
-      <button type="button" id="fechar-modal-tarefa" class="modal-fechar" aria-label="Fechar">×</button>
+      <button type="button" id="fechar-modal-tarefa" class=-"modal-fechar" aria-label="Fechar">×</button>
       <h2 id="modal-tarefa-titulo">Criar tarefa</h2>
       <form id="form-criar-tarefa">
-        <label for="tarefa-titulo">Título</label>
+        <label for="tarefa-titulo">Assunto</label>
         <input id="tarefa-titulo" name="titulo" type="text" maxlength="64" required
           placeholder="Digite o título da tarefa">
         <small id="tarefa-contador">0/64 caracteres</small>
@@ -592,6 +635,7 @@
       aria-labelledby="detalhe-tarefa-titulo">
       <button type="button" id="fechar-detalhe-tarefa" class="modal-fechar" aria-label="Fechar">×</button>
       <h2 id="detalhe-tarefa-titulo"></h2>
+      <p id="detalhe-tarefa-criador" hidden></p>
       <p id="detalhe-tarefa-empresa" class="tarefa-data"></p>
       <p id="detalhe-tarefa-observacao" class="detalhe-tarefa-observacao"></p>
       <p id="detalhe-tarefa-data" class="tarefa-data"></p>

@@ -111,12 +111,13 @@ function uploadTarefa(req, res, next) {
   );
 }
 
-// Todas as rotas exigem autenticação e perfil autorizado.
+// Autenticação e permissões
 router.use(auth);
 router.use(perfis("analista", "supervisor"));
 
-// Consultas e gerenciamento de tarefas.
+// Consultas e gerenciamento de tarefas
 router.get("/clientes", controller.listarEmpresas);
+router.get("/impressao", controller.imprimir);
 
 router.get("/", controller.listar);
 router.get("/realizadas", controller.realizadas);
@@ -127,7 +128,7 @@ router.patch("/:id", controller.atualizar);
 router.patch("/:id/finalizar", controller.finalizar);
 router.patch("/:id/reabrir", controller.reabrir);
 
-// Gerenciamento de anexos.
+// Gerenciamento de anexos
 router.post("/:id/anexos", uploadTarefa, (req, res, next) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({

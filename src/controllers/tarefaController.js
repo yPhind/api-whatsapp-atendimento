@@ -2,6 +2,7 @@ const empresaRepository = require("../repositories/empresaRepository");
 const fs = require("fs");
 const path = require("path");
 const repo = require("../repositories/tarefaRepository");
+const usuarioSistemaRepository = require("../repositories/usuarioSistemaRepository");
 
 function dataValida(data) {
   if (!data) return true;
@@ -131,33 +132,50 @@ async function validarEmpresa(empresaId) {
 async function incluirDadosEmpresas(tarefas) {
   if (!tarefas.length) return tarefas;
 
-  const ids = [
-    ...new Set(
-      tarefas
-        .map(t => t.empresa_id)
-        .filter(id => id !== null && id !== undefined)
-        .map(Number)
-    )
-  ];
+  const ids = [...new Set(
+    tarefas
+      .map(tarefa => tarefa.empresa_id)
+      .filter(id => id !== null && id !== undefined)
+      .map(Number)
+  )];
 
   if (!ids.length) {
-    return tarefas.map(t => ({
-      ...t,
-      empresa: null
-    }));
+    return tarefas.map(tarefa => ({ ...tarefa, empresa: null }));
   }
 
   const empresas = await empresaRepository.buscarPorIds(ids);
-
   const empresasPorId = new Map(
     empresas.map(empresa => [String(empresa.id), empresa])
   );
 
-  return tarefas.map(t => ({
-    ...t,
-    empresa: t.empresa_id
-      ? empresasPorId.get(String(t.empresa_id)) || null
+  return tarefas.map(tarefa => ({
+    ...tarefa,
+    empresa: tarefa.empresa_id
+      ? empresasPorId.get(String(tarefa.empresa_id)) || null
       : null
+  }));
+}
+
+async function incluirDadosCriadores(tarefas) {
+  if (!tarefas.length) return tarefas;
+
+  const ids = [...new Set(
+    tarefas
+      .map(tarefa => Number(tarefa.usuario_id))
+      .filter(id => Number.isSafeInteger(id) && id > 0)
+  )];
+
+  const usuarios = await Promise.all(
+    ids.map(id => usuarioSistemaRepository.buscarPorId(id))
+  );
+
+  const nomesPorId = new Map(
+    usuarios.filter(Boolean).map(usuario => [String(usuario.id), usuario.nome])
+  );
+
+  return tarefas.map(tarefa => ({
+    ...tarefa,
+    criador_nome: nomesPorId.get(String(tarefa.usuario_id)) || null
   }));
 }
 
@@ -170,16 +188,127 @@ async function listarEmpresas(req, res, next) {
   }
 }
 
+function escaparHtml(valor) {
+  return String(valor ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatarDataImpressao(valor) {
+  if (!valor) return "Não informada";
+  const data = new Date(`${String(valor).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(data.getTime())) return "Não informada";
+  return data.toLocaleDateString("pt-BR");
+}
+
+async function imprimir(req, res, next) {
+  try {
+    const usuarioId = obterUsuarioId(req);
+    const ehSupervisor = req.usuarioSistema?.perfil === "supervisor";
+    const idsTexto = String(req.query.ids || "");
+    const ids = [...new Set(idsTexto.split(",").map(valor => {
+      const id = Number(valor.trim());
+      if (!Number.isSafeInteger(id) || id <= 0) {
+        throw erroHttp("Identificador de tarefa inválido.");
+      }
+      return id;
+    }))];
+
+    if (!ids.length || ids.length > 50) {
+      throw erroHttp("Selecione entre 1 e 50 tarefas para imprimir.");
+    }
+
+    const tarefas = await repo.listarParaImpressao(ids, usuarioId, ehSupervisor);
+    if (tarefas.length !== ids.length) {
+      return res.status(404).json({ mensagem: "Uma ou mais tarefas não foram encontradas ou não estão disponíveis para seu usuário." });
+    }
+
+    const tarefasComEmpresas = await incluirDadosEmpresas(tarefas);
+    const tarefasComDados = ehSupervisor
+      ? await incluirDadosCriadores(tarefasComEmpresas)
+      : tarefasComEmpresas;
+
+    const paginas = tarefasComDados.map((tarefa, indice) => `
+      <section class="pagina">
+        <header><div class="sistema">SISTEMA DE ATENDIMENTO</div><h1>RELATÓRIO DE TAREFA</h1></header>
+        <div class="campo"><strong>Tarefa</strong><div>${escaparHtml(tarefa.titulo)}</div></div>
+        <div class="campo"><strong>Empresa vinculada</strong><div>${escaparHtml(tarefa.empresa?.razao_social || tarefa.empresa?.nome_fantasia || "Não vinculada")}</div></div>
+        ${ehSupervisor ? `<div class="campo"><strong>Criada por</strong><div>${escaparHtml(tarefa.criador_nome || "Não identificado")}</div></div>` : ""}
+        <div class="campo observacao"><strong>Observação</strong><div>${escaparHtml(tarefa.observacao).replace(/\r?\n/g, "<br>")}</div></div>
+        <div class="campo"><strong>Data prevista</strong><div>${escaparHtml(formatarDataImpressao(tarefa.data_prevista))}</div></div>
+        <footer>Documento ${indice + 1} de ${tarefasComDados.length} · Gerado em ${new Date().toLocaleString("pt-BR")}</footer>
+      </section>
+    `).join("");
+
+    const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Relatório de tarefas</title><style>
+      *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#222;margin:0;background:#fff}.pagina{width:210mm;min-height:297mm;padding:22mm 20mm;margin:0 auto;position:relative;page-break-after:always}.pagina:last-child{page-break-after:auto}header{text-align:center;border-bottom:2px solid #333;padding-bottom:18px;margin-bottom:30px}.sistema{font-size:10px;letter-spacing:2px;color:#666}h1{font-size:21px;margin:12px 0 0}.campo{margin:0 0 22px;line-height:1.5}.campo strong{display:block;font-size:11px;text-transform:uppercase;color:#555;margin-bottom:5px}.campo div{font-size:14px;white-space:normal;overflow-wrap:anywhere}.observacao{min-height:90px}.observacao div{white-space:normal;line-height:1.7}footer{position:absolute;bottom:18mm;left:20mm;right:20mm;border-top:1px solid #ddd;padding-top:10px;color:#777;font-size:10px;text-align:center}@page{size:A4;margin:0}@media print{body{margin:0}.pagina{margin:0;box-shadow:none}}
+      </style></head><body>${paginas}<script>window.addEventListener('load',()=>window.print());</script></body></html>`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'");
+    res.send(html);
+  } catch (erro) {
+    next(erro);
+  }
+}
+
+function obterFiltrosTarefas(req, ehSupervisor) {
+  const empresaId = req.query.empresaId || null;
+  const dataPrevista = req.query.dataPrevista || null;
+  const analistaId = req.query.analistaId || null;
+
+  if (empresaId) {
+    const id = Number(empresaId);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      throw erroHttp("Cliente selecionado inválido.");
+    }
+  }
+
+  if (dataPrevista && !dataValida(dataPrevista)) {
+    throw erroHttp("Data prevista inválida.");
+  }
+
+  let usuarioId = null;
+
+  // Somente supervisor pode selecionar outro analista.
+  if (ehSupervisor && analistaId) {
+    usuarioId = obterIdParametro(analistaId, "Analista");
+  }
+
+  return {
+    empresaId: empresaId ? Number(empresaId) : null,
+    dataPrevista,
+    usuarioId
+  };
+}
+
 async function listar(req, res, next) {
   try {
     const usuarioId = obterUsuarioId(req);
+    const ehSupervisor =
+      req.usuarioSistema?.perfil === "supervisor";
+
+    const filtros = obterFiltrosTarefas(req, ehSupervisor);
 
     const tarefas = await repo.listarPorUsuario(
       usuarioId,
-      false
+      false,
+      ehSupervisor,
+      filtros
     );
 
-    const tarefasComEmpresas = await incluirDadosEmpresas(tarefas);
+    let tarefasComEmpresas = await incluirDadosEmpresas(tarefas);
+
+    if (ehSupervisor) {
+      tarefasComEmpresas = await incluirDadosCriadores(
+        tarefasComEmpresas
+      );
+    }
 
     res.json({ tarefas: tarefasComEmpresas });
   } catch (erro) {
@@ -190,13 +319,25 @@ async function listar(req, res, next) {
 async function realizadas(req, res, next) {
   try {
     const usuarioId = obterUsuarioId(req);
+    const ehSupervisor =
+      req.usuarioSistema?.perfil === "supervisor";
+
+    const filtros = obterFiltrosTarefas(req, ehSupervisor);
 
     const tarefas = await repo.listarPorUsuario(
       usuarioId,
-      true
+      true,
+      ehSupervisor,
+      filtros
     );
 
-    const tarefasComEmpresas = await incluirDadosEmpresas(tarefas);
+    let tarefasComEmpresas = await incluirDadosEmpresas(tarefas);
+
+    if (ehSupervisor) {
+      tarefasComEmpresas = await incluirDadosCriadores(
+        tarefasComEmpresas
+      );
+    }
 
     res.json({ tarefas: tarefasComEmpresas });
   } catch (erro) {
@@ -469,6 +610,7 @@ module.exports = {
   listar,
   realizadas,
   listarEmpresas,
+  imprimir,
   criar,
   atualizar,
   finalizar,
@@ -476,5 +618,8 @@ module.exports = {
   anexar,
   baixarAnexo,
   visualizarAnexo,
-  removerAnexo
+  removerAnexo,
+  obterFiltrosTarefas,
+  incluirDadosEmpresas,
+  incluirDadosCriadores
 };

@@ -154,7 +154,30 @@
     }
 
     const meses = [...new Set(mensal.map((item) => item.mes))].sort();
-    setores.forEach((setor) => {
+
+    const ordemSetores = [
+      "suporte expresso",
+      "suporte tecnico",
+      "treinamento",
+      "financeiro"
+    ];
+
+    const normalizarNomeSetor = (nome) =>
+      String(nome || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase();
+
+    const setoresOrdenados = [...setores].sort((a, b) => {
+      const indiceA = ordemSetores.indexOf(normalizarNomeSetor(a.setor_nome));
+      const indiceB = ordemSetores.indexOf(normalizarNomeSetor(b.setor_nome));
+
+      return (indiceA === -1 ? 999 : indiceA) -
+        (indiceB === -1 ? 999 : indiceB);
+    });
+
+    setoresOrdenados.forEach((setor) => {
       const card = document.createElement("section");
       card.className = "inicio-mensal-setor";
       const titulo = document.createElement("h4");

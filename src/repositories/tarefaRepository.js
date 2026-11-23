@@ -19,41 +19,73 @@ function validarStatus(status) {
   }
 }
 
-async function listarPorUsuario(usuarioId, realizadas = false) {
-  const id = validarId(usuarioId, "USUARIO_ID");
+
+async function listarPorUsuario(
+  usuarioId,
+  realizadas = false,
+  todosUsuarios = false,
+  filtros = {}
+) {
   const status = realizadas ? "realizada" : "em_digitacao";
+
+  const parametros = [status];
+  const condicoes = ["t.status = $1"];
+
+  // Analista visualiza somente as próprias tarefas.
+  // Supervisor pode visualizar tarefas de todos os usuários.
+  if (!todosUsuarios) {
+    const id = validarId(usuarioId, "USUARIO_ID");
+    parametros.push(id);
+    condicoes.push(`t.usuario_id = $${parametros.length}`);
+  } else if (filtros.usuarioId) {
+    const id = validarId(filtros.usuarioId, "USUARIO_ID");
+    parametros.push(id);
+    condicoes.push(`t.usuario_id = $${parametros.length}`);
+  }
+
+  // Filtro por cliente/empresa.
+  if (filtros.empresaId) {
+    const empresaId = validarId(filtros.empresaId, "EMPRESA_ID");
+    parametros.push(empresaId);
+    condicoes.push(`t.empresa_id = $${parametros.length}`);
+  }
+
+  // Filtro por data prevista.
+  if (filtros.dataPrevista) {
+    parametros.push(filtros.dataPrevista);
+    condicoes.push(`t.data_prevista = $${parametros.length}::date`);
+  }
 
   const resultado = await tarefas.query(
     `SELECT
-   t.id,
-   t.usuario_id,
-   t.empresa_id,
-   t.titulo,
-   t.observacao,
-   t.data_prevista,
-   t.status,
-   t.criado_em,
-   t.atualizado_em,
-   COALESCE(
-     json_agg(
-       json_build_object(
-         'id', a.id,
-         'nome_original', a.nome_original,
-         'mime_type', a.mime_type,
-         'tamanho', a.tamanho
-       )
-       ORDER BY a.id
-     ) FILTER (WHERE a.id IS NOT NULL),
-     '[]'::json
-   ) AS anexos
- FROM wb_tarefas t
- LEFT JOIN wb_tarefas_anexos a
-   ON a.tarefa_id = t.id
- WHERE t.usuario_id = $1
-   AND t.status = $2
- GROUP BY t.id
- ORDER BY t.criado_em DESC, t.id DESC`,
-    [id, status]
+       t.id,
+       t.usuario_id,
+       t.empresa_id,
+       t.titulo,
+       t.observacao,
+       t.data_prevista,
+       t.status,
+       t.criado_em,
+       t.atualizado_em,
+       COALESCE(
+         json_agg(
+           json_build_object(
+             'id', a.id,
+             'nome_original', a.nome_original,
+             'mime_type', a.mime_type,
+             'tamanho', a.tamanho
+           )
+           ORDER BY a.id
+         ) FILTER (WHERE a.id IS NOT NULL),
+         '[]'::json
+       ) AS anexos
+     FROM wb_tarefas t
+     LEFT JOIN wb_tarefas_anexos a
+       ON a.tarefa_id = t.id
+     WHERE ${condicoes.join(" AND ")}
+     GROUP BY t.id
+     ORDER BY t.criado_em DESC, t.id DESC`,
+    parametros
   );
 
   return resultado.rows;
@@ -285,8 +317,40 @@ async function removerAnexo(id, usuarioId) {
   return resultado.rows[0] || null;
 }
 
+
+// Busca somente os campos textuais necessários para impressão.
+// Nenhuma informação da tabela de anexos é consultada.
+async function listarParaImpressao(ids, usuarioId, ehSupervisor = false) {
+  const idsValidos = [...new Set(ids.map(id => validarId(id, "TAREFA_ID")))];
+  const usuario = validarId(usuarioId, "USUARIO_ID");
+
+  if (!idsValidos.length || idsValidos.length > 50) {
+    throw new Error("QUANTIDADE_TAREFAS_IMPRESSAO_INVALIDA");
+  }
+
+  const resultado = await tarefas.query(
+    `SELECT
+       id,
+       usuario_id,
+       empresa_id,
+       titulo,
+       observacao,
+       data_prevista,
+       status,
+       criado_em
+     FROM wb_tarefas
+     WHERE id = ANY($1::bigint[])
+       AND ($2::boolean = TRUE OR usuario_id = $3)
+     ORDER BY criado_em DESC, id DESC`,
+    [idsValidos, Boolean(ehSupervisor), usuario]
+  );
+
+  return resultado.rows;
+}
+
 module.exports = {
   listarPorUsuario,
+  listarParaImpressao,
   criar,
   buscar,
   atualizar,

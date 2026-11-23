@@ -129,8 +129,10 @@ async function obterTodosParaSupervisor() {
   return atendimentoRepository.listarTodosParaSupervisor();
 }
 
-async function obterAtendimentosHistorico() {
-  return atendimentoRepository.listarHistorico();
+async function obterAtendimentosHistorico({ perfil, usuarioId }) {
+  // Supervisor consulta todo o histórico; analista somente seus próprios chamados.
+  const analistaId = perfil === "supervisor" ? null : Number(usuarioId);
+  return atendimentoRepository.listarHistorico(analistaId);
 }
 
 async function obterConversa(atendimentoId) {

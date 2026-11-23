@@ -126,7 +126,7 @@ async function carregarPerfil() {
 
   const menus = {
     "nav-usuarios": !ehSupervisor,
-    "nav-historico": !ehSupervisor,
+    "nav-historico": false,
     "nav-logs": !ehSupervisor
   };
 
@@ -1024,7 +1024,7 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
     const novaVisualizacao = botao.dataset.view;
 
     if (
-      ["usuarios", "historico", "logs"].includes(novaVisualizacao) &&
+      ["usuarios", "logs"].includes(novaVisualizacao) &&
       usuarioAtual?.perfil !== "supervisor"
     ) {
       return;
@@ -1105,7 +1105,20 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
 
     if (gerenciandoTarefas) {
       title.textContent = "Tarefas";
-      await carregarTarefas();
+
+      try {
+        await carregarFiltrosTarefas();
+        await carregarTarefas();
+      } catch (erro) {
+        tarefasContainer.replaceChildren(
+          criarElemento(
+            "p",
+            erro.message || "Não foi possível carregar os filtros.",
+            "error-message"
+          )
+        );
+      }
+
       return;
     }
 
@@ -1130,8 +1143,181 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
 const modalCriarTarefa = document.getElementById("modal-criar-tarefa"), formCriarTarefa = document.getElementById("form-criar-tarefa");
 const tarefasContainer = document.getElementById("tarefas-lista"), campoTituloTarefa = document.getElementById("tarefa-titulo"), campoObservacaoTarefa = document.getElementById("tarefa-observacao"), campoDataTarefa = document.getElementById("tarefa-data"), mensagemTarefa = document.getElementById("tarefa-mensagem");
 const campoEmpresaTarefa = document.getElementById("tarefa-empresa");
+const filtroTarefaCliente = document.getElementById("filtro-tarefa-cliente");
+const filtroTarefaData = document.getElementById("filtro-tarefa-data");
+const filtroTarefaAnalista = document.getElementById("filtro-tarefa-analista");
+const filtroTarefaAnalistaContainer = document.getElementById(
+  "filtro-tarefa-analista-container"
+);
 let tarefaEmEdicao = null, tarefaSelecionada = null, modoTarefasRealizadas = false;
+const tarefasSelecionadasImpressao = new Set();
+let tarefasVisiveis = [];
+
 function formatarDataTarefa(data) { if (!data) return "Sem data prevista"; const p = String(data).slice(0, 10).split("-"); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : String(data); }
+
+async function carregarFiltrosTarefas() {
+  // Carrega os clientes disponíveis.
+  const respostaClientes = await API.get("/api/tarefas/clientes");
+  const empresas = respostaClientes.empresas || [];
+
+  filtroTarefaCliente.replaceChildren(
+    new Option("Todos os clientes", "")
+  );
+
+  empresas.forEach((empresa) => {
+    const nome = empresa.nome_fantasia || empresa.razao_social;
+
+    filtroTarefaCliente.add(
+      new Option(nome, String(empresa.id))
+    );
+  });
+
+  // O filtro por analista é exclusivo do supervisor.
+  const ehSupervisor = usuarioAtual?.perfil === "supervisor";
+
+  filtroTarefaAnalistaContainer.hidden = !ehSupervisor;
+
+  if (ehSupervisor) {
+    const respostaAnalistas = await API.get("/api/analistas");
+    const analistas = respostaAnalistas.analistas || [];
+
+    filtroTarefaAnalista.replaceChildren(
+      new Option("Todos os analistas", "")
+    );
+
+    analistas
+      .filter((analista) => analista.ativo === true)
+      .forEach((analista) => {
+        filtroTarefaAnalista.add(
+          new Option(analista.nome, String(analista.id))
+        );
+      });
+  }
+}
+
+function atualizarSelecaoImpressao() {
+  const contador = document.getElementById("tarefas-impressao-contador");
+  const botao = document.getElementById("imprimir-tarefas-selecionadas");
+  const selecionarTodas = document.getElementById("selecionar-todas-tarefas");
+  const visiveis = tarefasVisiveis.map(t => String(t.id));
+  const selecionadasVisiveis = visiveis.filter(id => tarefasSelecionadasImpressao.has(id));
+
+  if (contador) contador.textContent = `${tarefasSelecionadasImpressao.size} selecionada(s)`;
+  if (botao) botao.disabled = tarefasSelecionadasImpressao.size === 0;
+  if (selecionarTodas) {
+    selecionarTodas.checked = visiveis.length > 0 && selecionadasVisiveis.length === visiveis.length;
+    selecionarTodas.indeterminate = selecionadasVisiveis.length > 0 && selecionadasVisiveis.length < visiveis.length;
+  }
+}
+
+function prepararControlesImpressaoTarefas() {
+  const toolbar = document.querySelector("#tarefas-section .tarefas-toolbar");
+  if (!toolbar || document.getElementById("tarefas-impressao-controles")) return;
+
+  const controles = document.createElement("div");
+  controles.id = "tarefas-impressao-controles";
+  controles.className = "tarefas-impressao-controles";
+
+  const label = document.createElement("label");
+  label.className = "tarefas-selecionar-todas";
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.id = "selecionar-todas-tarefas";
+  checkbox.addEventListener("change", () => {
+    tarefasVisiveis.forEach(t => {
+      const id = String(t.id);
+      if (checkbox.checked) tarefasSelecionadasImpressao.add(id);
+      else tarefasSelecionadasImpressao.delete(id);
+    });
+    document.querySelectorAll(".tarefa-selecao-checkbox").forEach(campo => {
+      campo.checked = checkbox.checked;
+    });
+    atualizarSelecaoImpressao();
+  });
+  label.append(checkbox, document.createTextNode("Selecionar todas"));
+
+  const contador = document.createElement("span");
+  contador.id = "tarefas-impressao-contador";
+  contador.className = "tarefas-impressao-contador";
+  contador.textContent = "0 selecionada(s)";
+
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.id = "imprimir-tarefas-selecionadas";
+  botao.className = "secondary-button";
+  botao.textContent = "Imprimir selecionadas";
+  botao.disabled = true;
+  botao.addEventListener("click", () => {
+    imprimirTarefas([...tarefasSelecionadasImpressao]);
+  });
+
+  controles.append(label, contador, botao);
+  toolbar.append(controles);
+
+  const acoesModal = document.querySelector("#modal-detalhe-tarefa .modal-acoes");
+  if (acoesModal && !document.getElementById("imprimir-detalhe-tarefa")) {
+    const botaoIndividual = document.createElement("button");
+    botaoIndividual.type = "button";
+    botaoIndividual.id = "imprimir-detalhe-tarefa";
+    botaoIndividual.className = "secondary-button";
+    botaoIndividual.textContent = "Imprimir tarefa";
+    botaoIndividual.addEventListener("click", () => {
+      if (tarefaSelecionada) imprimirTarefas([String(tarefaSelecionada.id)]);
+    });
+    acoesModal.insertBefore(botaoIndividual, acoesModal.firstChild);
+  }
+}
+
+async function imprimirTarefas(ids) {
+  const idsValidos = [...new Set((ids || []).map(String).filter(id => /^\d+$/.test(id)))];
+  if (!idsValidos.length) {
+    alert("Selecione pelo menos uma tarefa para imprimir.");
+    return;
+  }
+  if (idsValidos.length > 50) {
+    alert("É possível imprimir até 50 tarefas por vez.");
+    return;
+  }
+
+  const janela = window.open("about:blank", "_blank");
+  if (!janela) {
+    alert("Permita a abertura de janelas pop-up para imprimir as tarefas.");
+    return;
+  }
+  janela.document.write("<p style='font-family:Arial;padding:24px'>Preparando relatório...</p>");
+
+  try {
+    const token = sessionStorage.getItem("token");
+    const resposta = await fetch(`/api/tarefas/impressao?ids=${encodeURIComponent(idsValidos.join(","))}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+
+    if (resposta.status === 401) {
+      janela.close();
+      sessionStorage.removeItem("token");
+      window.location.href = "/";
+      return;
+    }
+
+    if (!resposta.ok) {
+      const texto = await resposta.text();
+      let mensagem = "Não foi possível gerar o relatório de impressão.";
+      try {
+        const dados = JSON.parse(texto);
+        mensagem = dados.mensagem || dados.erro || mensagem;
+      } catch { }
+      throw new Error(mensagem);
+    }
+
+    const html = await resposta.blob();
+    const url = URL.createObjectURL(html);
+    janela.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (erro) {
+    janela.close();
+    alert(erro.message || "Erro ao preparar a impressão.");
+  }
+}
 
 async function carregarTarefas() {
   tarefasContainer.replaceChildren(
@@ -1139,13 +1325,38 @@ async function carregarTarefas() {
   );
 
   try {
+
+    const parametros = new URLSearchParams();
+
+    if (filtroTarefaCliente.value) {
+      parametros.set("empresaId", filtroTarefaCliente.value);
+    }
+
+    if (filtroTarefaData.value) {
+      parametros.set("dataPrevista", filtroTarefaData.value);
+    }
+
+    if (
+      usuarioAtual?.perfil === "supervisor" &&
+      filtroTarefaAnalista.value
+    ) {
+      parametros.set("analistaId", filtroTarefaAnalista.value);
+    }
+
+    const endpointBase = modoTarefasRealizadas
+      ? "/api/tarefas/realizadas"
+      : "/api/tarefas";
+
+    const query = parametros.toString();
+
     const r = await API.get(
-      modoTarefasRealizadas
-        ? "/api/tarefas/realizadas"
-        : "/api/tarefas"
+      query ? `${endpointBase}?${query}` : endpointBase
     );
 
+
     const tarefas = Array.isArray(r.tarefas) ? r.tarefas : [];
+    tarefasVisiveis = tarefas;
+    prepararControlesImpressaoTarefas();
 
     tarefasContainer.className =
       modoVisualizacaoTarefas === "quadros"
@@ -1173,43 +1384,106 @@ async function carregarTarefas() {
       card.tabIndex = 0;
       card.setAttribute("role", "button");
 
+      // Caixa de seleção para impressão em lote.
+      const selecao = document.createElement("label");
+      selecao.className = "tarefa-selecao";
+      const checkboxSelecao = document.createElement("input");
+      checkboxSelecao.type = "checkbox";
+      checkboxSelecao.className = "tarefa-selecao-checkbox";
+      checkboxSelecao.checked = tarefasSelecionadasImpressao.has(String(t.id));
+      checkboxSelecao.setAttribute("aria-label", `Selecionar tarefa ${t.titulo}`);
+      checkboxSelecao.addEventListener("click", event => event.stopPropagation());
+      checkboxSelecao.addEventListener("change", () => {
+        const id = String(t.id);
+        if (checkboxSelecao.checked) tarefasSelecionadasImpressao.add(id);
+        else tarefasSelecionadasImpressao.delete(id);
+        atualizarSelecaoImpressao();
+      });
+      selecao.append(checkboxSelecao);
+
       const h = document.createElement("h3");
+      h.className = "tarefa-titulo";
       h.textContent = t.titulo;
 
       const p = document.createElement("p");
       p.className = "tarefa-observacao";
-      p.textContent = t.observacao;
+      p.textContent = t.observacao || "";
 
       const d = document.createElement("span");
-      d.className = "tarefa-data";
+      d.className = "tarefa-data tarefa-data-prevista";
       d.textContent = `◷ ${formatarDataTarefa(t.data_prevista)}`;
 
-      card.append(h, p, d);
+      const meta = document.createElement("div");
+      meta.className = "tarefa-meta-lista";
+      meta.append(d);
 
+      let empresa = null;
       if (t.empresa) {
-        const empresa = document.createElement("span");
-        empresa.className = "tarefa-data";
-        empresa.textContent =
-          `Empresa: ${t.empresa.nome_fantasia || t.empresa.razao_social}`;
-
-        card.append(empresa);
+        empresa = document.createElement("span");
+        empresa.className = "tarefa-data tarefa-empresa";
+        empresa.textContent = `Empresa: ${t.empresa.nome_fantasia || t.empresa.razao_social}`;
       }
 
-      // Abre os detalhes da tarefa.
+      let criador = null;
+      if (usuarioAtual?.perfil === "supervisor" && t.criador_nome) {
+        criador = document.createElement("span");
+        criador.className = "tarefa-data tarefa-criador";
+        criador.textContent = `Criada por: ${t.criador_nome}`;
+        meta.append(criador);
+      }
+
+      if (empresa) card.append(empresa);
+
+      // Ícone de anexo aparece somente quando há arquivos vinculados à tarefa.
+      const anexos = Array.isArray(t.anexos) ? t.anexos : [];
+      let indicadorAnexo = null;
+
+      if (anexos.length > 0) {
+        indicadorAnexo = document.createElement("span");
+        indicadorAnexo.className = "tarefa-indicador-anexo";
+        indicadorAnexo.title = `${anexos.length} anexo(s) nesta tarefa`;
+        indicadorAnexo.setAttribute("aria-label", `${anexos.length} anexo(s) nesta tarefa`);
+
+        const svgNS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgNS, "svg");
+
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("width", "19");
+        svg.setAttribute("height", "19");
+        svg.setAttribute("fill", "none");
+        svg.setAttribute("stroke", "currentColor");
+        svg.setAttribute("stroke-width", "1.8");
+        svg.setAttribute("stroke-linecap", "round");
+        svg.setAttribute("stroke-linejoin", "round");
+        svg.setAttribute("aria-hidden", "true");
+
+        const caminho = document.createElementNS(svgNS, "path");
+        caminho.setAttribute(
+          "d",
+          "m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.19 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+        );
+
+        svg.appendChild(caminho);
+        indicadorAnexo.appendChild(svg);
+      }
+
+      card.append(selecao, h, meta, p);
+      if (indicadorAnexo) card.append(indicadorAnexo);
+
+      // Abre os detalhes da tarefa; a observação completa continua no modal.
       const abrir = () => abrirDetalheTarefa(t);
-
       card.addEventListener("click", abrir);
-
       card.addEventListener("keydown", (event) => {
+        if (event.target.closest("input, label")) return;
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           abrir();
         }
       });
 
-      // Insere o card na lista.
       tarefasContainer.append(card);
     });
+    atualizarSelecaoImpressao();
 
   } catch (e) {
     tarefasContainer.replaceChildren(
@@ -1313,9 +1587,24 @@ function abrirDetalheTarefa(t) {
   empresaDetalhe.textContent = t.empresa
     ? `Empresa: ${t.empresa.nome_fantasia || t.empresa.razao_social} — CNPJ: ${t.empresa.cnpj}`
     : "Nenhuma empresa vinculada";
+  let criadorDetalhe = document.getElementById(
+    "detalhe-tarefa-criador"
+  );
+
+  if (criadorDetalhe) {
+    criadorDetalhe.hidden = usuarioAtual?.perfil !== "supervisor";
+
+    if (usuarioAtual?.perfil === "supervisor") {
+      criadorDetalhe.textContent =
+        `Criada por: ${t.criador_nome || "Usuário não identificado"}`;
+    } else {
+      criadorDetalhe.textContent = "";
+    }
+  }
   document.getElementById("detalhe-tarefa-observacao").textContent = t.observacao;
   document.getElementById("detalhe-tarefa-data").textContent = `◷ ${formatarDataTarefa(t.data_prevista)}`;
   renderizarAnexosTarefa(t);
+  prepararControlesImpressaoTarefas();
   document.getElementById("editar-detalhe-tarefa").hidden = modoTarefasRealizadas;
   document.getElementById("finalizar-detalhe-tarefa").hidden = modoTarefasRealizadas;
   if (modoTarefasRealizadas) { const b = document.getElementById("finalizar-detalhe-tarefa"); b.hidden = false; b.textContent = "Voltar para Em digitação"; } else document.getElementById("finalizar-detalhe-tarefa").textContent = "Marcar como realizada";
@@ -1407,6 +1696,23 @@ document.getElementById("ver-tarefas-realizadas")?.addEventListener("click", () 
 function definirModoTarefas(modo) { modoVisualizacaoTarefas = modo; const q = modo === "quadros"; document.getElementById("tarefas-modo-quadros").classList.toggle("active", q); document.getElementById("tarefas-modo-lista").classList.toggle("active", !q); document.getElementById("tarefas-modo-quadros").setAttribute("aria-pressed", String(q)); document.getElementById("tarefas-modo-lista").setAttribute("aria-pressed", String(!q)); if (visualizacao === "tarefas") carregarTarefas(); }
 document.getElementById("tarefas-modo-quadros")?.addEventListener("click", () => definirModoTarefas("quadros"));
 document.getElementById("tarefas-modo-lista")?.addEventListener("click", () => definirModoTarefas("lista"));
+
+document.getElementById("aplicar-filtros-tarefas")
+  ?.addEventListener("click", () => {
+    carregarTarefas();
+  });
+
+document.getElementById("limpar-filtros-tarefas")
+  ?.addEventListener("click", () => {
+    filtroTarefaCliente.value = "";
+    filtroTarefaData.value = "";
+
+    if (usuarioAtual?.perfil === "supervisor") {
+      filtroTarefaAnalista.value = "";
+    }
+
+    carregarTarefas();
+  });
 
 document.getElementById("atualizar-indicadores")?.addEventListener("click", carregarIndicadores);
 
@@ -2494,7 +2800,7 @@ async function carregarLogs() {
     const tabela = criarElemento("table", "", "analistas-tabela");
     const thead = document.createElement("thead");
     const linhaCabecalho = document.createElement("tr");
-    ["Data e hora", "Atendimento", "Cliente", "Usuário responsável", "Ação", "Detalhes"].forEach(
+    ["Data e hora", "Atd. e Protocolo", "Cliente", "Usuário responsável", "Ação", "Detalhes"].forEach(
       (texto) => linhaCabecalho.append(criarElemento("th", texto))
     );
     thead.append(linhaCabecalho);
@@ -2504,8 +2810,25 @@ async function carregarLogs() {
       const th = document.createElement("th");
       const input = document.createElement("input");
       input.type = "search";
-      input.placeholder = "Filtrar...";
-      input.setAttribute("aria-label", `Filtrar coluna ${["Data e hora", "Atendimento", "Cliente", "Usuário responsável", "Ação", "Detalhes"][indice]}`);
+      const nomesColunas = [
+        "Data e hora",
+        "Atendimento",
+        "Cliente",
+        "Usuário responsável",
+        "Ação",
+        "Detalhes"
+      ];
+
+      input.placeholder = indice === 1
+        ? "Nº do chamado ou protocolo"
+        : "Filtrar...";
+
+      input.setAttribute(
+        "aria-label",
+        indice === 1
+          ? "Filtrar por número do chamado ou protocolo"
+          : `Filtrar coluna ${nomesColunas[indice]}`
+      );
       input.dataset.filtroColunaLog = String(indice);
       th.append(input); linhaFiltros.append(th);
     });

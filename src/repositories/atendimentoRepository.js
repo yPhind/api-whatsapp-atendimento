@@ -217,7 +217,11 @@ async function alterarStatus({
         WHERE id = $1
           AND ($4::boolean = TRUE OR analista_id = $2)
           AND arquivado = FALSE
-          AND (status <> 'realizado' OR $4::boolean = TRUE)
+          AND (
+            status <> 'realizado'
+            OR $4::boolean = TRUE
+            OR ($3 = 'pendente' AND status = 'realizado')
+          )
         RETURNING *`,
       [atendimentoId, analistaId, status, isSupervisor]
     );
@@ -238,27 +242,36 @@ async function devolverParaFila(atendimentoId) {
   return resultado.rows[0] || null;
 }
 
-async function listarHistorico() {
+
+async function listarHistorico(analistaId = null) {
   const resultado = await atendimento.query(
     `SELECT a.*,
             s.nome AS setor_nome,
             an.nome AS analista_nome,
-            (SELECT COUNT(*)::integer FROM wb_mensagens m
+            (SELECT COUNT(*)::integer
+               FROM wb_mensagens m
               WHERE m.atendimento_id = a.id) AS total_mensagens,
-            (SELECT MAX(m.criado_em) FROM wb_mensagens m
+            (SELECT MAX(m.criado_em)
+               FROM wb_mensagens m
               WHERE m.atendimento_id = a.id) AS ultima_mensagem_em
        FROM wb_atendimentos a
        JOIN wb_setores s ON s.id = a.setor_id
        LEFT JOIN wb_usuarios_sistema an ON an.id = a.analista_id
-      WHERE a.status = 'realizado' OR a.arquivado = TRUE
+      WHERE (a.status = 'realizado' OR a.arquivado = TRUE)
+        AND ($1::bigint IS NULL OR a.analista_id = $1)
       ORDER BY COALESCE(
-        (SELECT MAX(m.criado_em) FROM wb_mensagens m
+        (SELECT MAX(m.criado_em)
+           FROM wb_mensagens m
           WHERE m.atendimento_id = a.id),
-        a.atualizado_em, a.criado_em
-      ) DESC, a.id DESC`
+        a.atualizado_em,
+        a.criado_em
+      ) DESC, a.id DESC`,
+    [analistaId]
   );
+
   return incluirDadosClientes(resultado.rows);
 }
+
 
 async function alterarSetor({ atendimentoId, setorId }) {
   const resultado = await atendimento.query(

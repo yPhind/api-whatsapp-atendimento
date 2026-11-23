@@ -752,8 +752,11 @@ async function devolverParaFila(req, res, next) {
 
 async function listarHistorico(req, res, next) {
   try {
-    const atendimentos =
-      await atendimentoService.obterAtendimentosHistorico();
+    const usuario = req.usuarioSistema;
+    const atendimentos = await atendimentoService.obterAtendimentosHistorico({
+      perfil: usuario.perfil,
+      usuarioId: Number(usuario.id)
+    });
 
     return res.json({ atendimentos });
   } catch (erro) {
@@ -762,6 +765,7 @@ async function listarHistorico(req, res, next) {
 }
 
 async function obterConversaHistorica(req, res, next) {
+  const usuario = req.usuarioSistema;
   const atendimentoId = Number(req.params.id);
 
   if (!Number.isInteger(atendimentoId) || atendimentoId <= 0) {
@@ -780,6 +784,15 @@ async function obterConversaHistorica(req, res, next) {
     ) {
       return res.status(404).json({
         mensagem: "Atendimento não encontrado no histórico."
+      });
+    }
+
+    if (
+      usuario.perfil !== "supervisor" &&
+      Number(atendimento.analista_id) !== Number(usuario.id)
+    ) {
+      return res.status(403).json({
+        mensagem: "Você não tem acesso a este atendimento no histórico."
       });
     }
 

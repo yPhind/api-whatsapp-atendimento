@@ -40,13 +40,13 @@ router.get(
 
 router.get(
   "/historico",
-  permitirPerfis("supervisor"),
+  permitirPerfis("analista", "supervisor"),
   controller.listarHistorico
 );
 
 router.get(
   "/historico/:id/conversa",
-  permitirPerfis("supervisor"),
+  permitirPerfis("analista", "supervisor"),
   controller.obterConversaHistorica
 );
 
