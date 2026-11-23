@@ -1,6 +1,4 @@
 
-const { randomUUID } = require("crypto");
-
 const usuarioRepository = require("../repositories/usuarioRepository");
 const atendimentoRepository = require("../repositories/atendimentoRepository");
 const mensagemRepository = require("../repositories/mensagemRepository");
@@ -54,14 +52,19 @@ async function abrirAtendimento({
     empresaId
   });
 
-  const protocolo = `WB-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const cnpj = String(empresa.cnpj || "").replace(/\\D/g, "");
+
+  if (cnpj.length !== 14) {
+    throw new Error("CNPJ_INVALIDO_PARA_GERAR_PROTOCOLO");
+  }
 
   const atendimento = await atendimentoRepository.criar({
     usuarioId: usuario.id,
+    usuarioNome: String(nome || "").trim(),
     setorId: setor.id,
     empresaId,
+    cnpj,
     descricao: descricao.trim(),
-    protocolo,
     atendimentoOrigemId
   });
 
@@ -358,13 +361,9 @@ async function editarAtendimento({
     throw new Error("DESCRICAO_INVALIDA");
   }
 
-  await usuarioRepository.atualizarNome({
-    usuarioId: atendimento.usuario_id,
-    nome: nomeLimpo
-  });
-
   const atualizado = await atendimentoRepository.editarDados({
     atendimentoId,
+    nome: nomeLimpo,
     setorId,
     descricao: descricaoLimpa
   });
@@ -631,6 +630,7 @@ async function alterarSetorAtendimento({
 
 async function replicarAtendimento({
   atendimentoId,
+  nome,
   setorId,
   descricao,
   analistaDestinoId = null,
@@ -648,14 +648,20 @@ async function replicarAtendimento({
     throw new Error("ATENDIMENTO_ARQUIVADO");
   }
 
+  // Analista pode replicar somente um atendimento atribuído ao próprio usuário.
+  // A autorização não depende do setor atual do analista: a responsabilidade
+  // pelo chamado é determinada pelo campo analista_id.
   if (
     perfil !== "supervisor" &&
-    (
-      Number(origem.setor_id) !== Number(setorUsuarioId) ||
-      Number(origem.analista_id) !== Number(usuarioSistemaId)
-    )
+    Number(origem.analista_id) !== Number(usuarioSistemaId)
   ) {
     throw new Error("SEM_PERMISSAO");
+  }
+
+  const nomeLimpo = String(nome || "").trim();
+
+  if (nomeLimpo.length < 2 || nomeLimpo.length > 150) {
+    throw new Error("NOME_INVALIDO");
   }
 
   const setor = await setorRepository.buscarPorId(Number(setorId));
@@ -703,6 +709,7 @@ async function replicarAtendimento({
     },
     valorNovo: {
       atendimento_id: Number(novo.atendimento.id),
+      nome: nomeLimpo,
       setor_id: Number(setorId),
       analista_id: atendimento?.analista_id || null
     },

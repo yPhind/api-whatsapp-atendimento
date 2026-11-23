@@ -204,7 +204,14 @@ async function replicarAtendimento(req, res, next) {
       ? Number(req.body.analistaId)
       : null;
 
+    const nome = String(req.body.nome || "").trim();
     const descricao = String(req.body.descricao || "").trim();
+
+    if (nome.length < 2 || nome.length > 150) {
+      return res.status(400).json({
+        mensagem: "Informe um nome de cliente entre 2 e 150 caracteres."
+      });
+    }
 
     if (descricao.length > 4000) {
       return res.status(400).json({
@@ -231,6 +238,7 @@ async function replicarAtendimento(req, res, next) {
 
     const resultado = await atendimentoService.replicarAtendimento({
       atendimentoId,
+      nome,
       setorId,
       descricao,
       analistaDestinoId,
@@ -257,6 +265,7 @@ async function replicarAtendimento(req, res, next) {
       ATENDIMENTO_ARQUIVADO: [409, "Não é possível replicar um atendimento arquivado."],
       SETOR_NAO_ENCONTRADO: [404, "Setor não encontrado ou inativo."],
       SEM_PERMISSAO: [403, "Você não tem permissão para replicar este atendimento."],
+      NOME_INVALIDO: [400, "Informe um nome de cliente entre 2 e 150 caracteres."],
       ANALISTA_NAO_ENCONTRADO: [404, "Analista não encontrado."],
       USUARIO_NAO_E_ANALISTA: [400, "O usuário selecionado não é um analista."],
       ANALISTA_INATIVO: [409, "O analista selecionado está inativo."],

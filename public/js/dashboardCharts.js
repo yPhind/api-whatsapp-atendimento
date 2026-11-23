@@ -1,6 +1,6 @@
 (function () {
   const SERIES = [
-    { key: "aguardando", label: "Aguardando", color: "#64748b" },
+    { key: "aguardando", label: "Aguardando", color: "#ef4444" },
     { key: "pendente", label: "Pendente", color: "#d97706" },
     { key: "em_atendimento", label: "Em atendimento", color: "#2563eb" },
     { key: "realizado", label: "Realizados", color: "#16a34a" }

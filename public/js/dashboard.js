@@ -544,6 +544,153 @@ async function abrirModalEditarAtendimento(chamado) {
   nome.focus();
 }
 
+
+/**
+ * Abre uma janela de seleção para as ações do menu Rotinas.
+ * O callback deve retornar normalmente após concluir a operação.
+ */
+function abrirModalSelecaoRotina({ titulo, descricao, opcoes, valorAtual, textoConfirmar, aoConfirmar }) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10001;display:flex;align-items:center;justify-content:center;padding:16px;";
+
+  const modal = document.createElement("section");
+  modal.className = "modal-content rotina-modal";
+  modal.style.cssText = "width:min(440px,100%);max-height:90vh;overflow:auto;background:var(--card-bg,#fff);color:var(--text-color,inherit);padding:22px;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.25);";
+
+  const cabecalho = criarElemento("h2", titulo);
+  const ajuda = criarElemento("p", descricao || "");
+  const seletor = document.createElement("select");
+  seletor.className = "ticket-controle-select";
+  seletor.setAttribute("aria-label", titulo);
+  opcoes.forEach((opcao) => seletor.add(new Option(opcao.texto, String(opcao.valor))));
+  if (valorAtual !== undefined && valorAtual !== null) seletor.value = String(valorAtual);
+
+  const acoes = document.createElement("div");
+  acoes.className = "rotina-modal-acoes";
+  const cancelar = criarElemento("button", "Cancelar", "secondary-button");
+  cancelar.type = "button";
+  const confirmar = criarElemento("button", textoConfirmar || "Confirmar", "primary-button");
+  confirmar.type = "button";
+
+  const fechar = () => overlay.remove();
+  cancelar.addEventListener("click", fechar);
+  confirmar.addEventListener("click", async () => {
+    if (!seletor.value) {
+      alert("Selecione uma opção.");
+      return;
+    }
+    confirmar.disabled = true;
+    const textoOriginal = confirmar.textContent;
+    confirmar.textContent = "Salvando...";
+    try {
+      const concluiu = await aoConfirmar(seletor.value);
+      if (concluiu !== false) fechar();
+    } catch (erro) {
+      alert(erro.message || "Não foi possível concluir a alteração.");
+    } finally {
+      if (confirmar.isConnected) {
+        confirmar.disabled = false;
+        confirmar.textContent = textoOriginal;
+      }
+    }
+  });
+
+  acoes.append(cancelar, confirmar);
+  modal.append(cabecalho, ajuda, seletor, acoes);
+  overlay.append(modal);
+  overlay.addEventListener("click", (event) => event.stopPropagation());
+  document.body.append(overlay);
+  seletor.focus();
+}
+
+async function abrirRotinaAlterarAnalista(chamado) {
+  const opcoes = analistasDisponiveis
+    .filter((item) => Number(item.setor_id) === Number(chamado.setor_id))
+    .map((item) => ({ valor: item.id, texto: item.nome }));
+  if (!opcoes.length) {
+    alert("Não há analistas disponíveis para este setor.");
+    return;
+  }
+  abrirModalSelecaoRotina({
+    titulo: `Alterar analista do atendimento #${chamado.id}`,
+    descricao: "Selecione o analista que ficará responsável pelo atendimento.",
+    opcoes,
+    valorAtual: chamado.analista_id,
+    textoConfirmar: "Alterar analista",
+    aoConfirmar: async (valor) => {
+      const analistaId = Number(valor);
+      if (analistaId === Number(chamado.analista_id)) {
+        alert("Selecione um analista diferente do atual.");
+        return false;
+      }
+      await API.post(`/api/atendimentos/${encodeURIComponent(chamado.id)}/atribuir`, { analistaId });
+      await carregarChamados();
+      if (atendimentoSelecionado && Number(atendimentoSelecionado.id) === Number(chamado.id)) {
+        await carregarConversa(chamado.id);
+      }
+    }
+  });
+}
+
+function abrirRotinaAlterarSetor(chamado) {
+  abrirModalSelecaoRotina({
+    titulo: `Alterar setor do atendimento #${chamado.id}`,
+    descricao: "Ao mudar o setor, o analista atual será removido e o atendimento voltará para Aguardando na fila do novo setor, quando aplicável.",
+    opcoes: setoresDisponiveis.map((item) => ({ valor: item.id, texto: item.nome })),
+    valorAtual: chamado.setor_id,
+    textoConfirmar: "Alterar setor",
+    aoConfirmar: async (valor) => {
+      const setorId = Number(valor);
+      if (setorId === Number(chamado.setor_id)) {
+        alert("Selecione um setor diferente do atual.");
+        return false;
+      }
+      const precisaDevolver = Boolean(chamado.analista_id) || chamado.status !== "aguardando";
+      const aviso = precisaDevolver
+        ? "Ao mudar o setor, o analista atual será removido e o atendimento voltará para Aguardando na fila do novo setor. Continuar?"
+        : "Deseja mover este atendimento para o setor selecionado?";
+      if (!confirm(aviso)) return false;
+      await API.post(`/api/atendimentos/${encodeURIComponent(chamado.id)}/setor`, { setorId });
+      await carregarChamados();
+    }
+  });
+}
+
+function abrirRotinaAlterarStatus(chamado) {
+  const statusAtual = normalizarStatus(chamado.status);
+  const opcoes = [
+    { valor: "aguardando", texto: "Aguardando" },
+    { valor: "em_atendimento", texto: "Em atendimento" },
+    { valor: "pendente", texto: "Pendente" },
+    { valor: "realizado", texto: "Realizado" }
+  ];
+  abrirModalSelecaoRotina({
+    titulo: `Alterar status do atendimento #${chamado.id}`,
+    descricao: "Selecione o novo status do atendimento.",
+    opcoes,
+    valorAtual: statusAtual,
+    textoConfirmar: "Alterar status",
+    aoConfirmar: async (valor) => {
+      if (valor === statusAtual) {
+        alert("Selecione um status diferente do atual.");
+        return false;
+      }
+      await API.patch(`/api/atendimentos/${encodeURIComponent(chamado.id)}/status`, { status: valor });
+      if (valor === "realizado" && atendimentoSelecionado && Number(atendimentoSelecionado.id) === Number(chamado.id)) {
+        atendimentoSelecionado = null;
+        mensagensAtendimento = [];
+        chatSection.hidden = true;
+      }
+      await carregarChamados();
+      if (valor !== "realizado" && atendimentoSelecionado && Number(atendimentoSelecionado.id) === Number(chamado.id)) {
+        await carregarConversa(chamado.id);
+      }
+    }
+  });
+}
+
+
 function renderizarChamados() {
   ticketList.replaceChildren();
   const supervisorAgrupado = usuarioAtual?.perfil === "supervisor" && ["fila", "meus"].includes(visualizacao);
@@ -574,6 +721,7 @@ function renderizarChamados() {
     );
     if (visualizacao === "meus" && chamados.length >= 2) card.classList.add("ticket-card-compacto");
     const statusNormalizado = normalizarStatus(chamado.status);
+    const estaNaFila = visualizacao === "fila";
 
     const nome = criarElemento(
       "h3",
@@ -609,359 +757,156 @@ function renderizarChamados() {
       vinculoOrigem.title = "Este atendimento foi criado a partir de outro chamado";
     }
 
-    let controleAtribuicao = null;
-
-    if (usuarioAtual?.perfil === "supervisor") {
-      controleAtribuicao = document.createElement("div");
-      controleAtribuicao.className = "ticket-atribuicao";
-
-      controleAtribuicao.addEventListener("click", (event) => {
-        event.stopPropagation();
-      });
-
-      const rotulo = criarElemento(
-        "p",
-        "Atribuir para:"
-      );
-
-      const selectAnalista = document.createElement("select");
-
-      selectAnalista.className =
-        "ticket-analista-select";
-
-      selectAnalista.setAttribute(
-        "aria-label",
-        `Selecionar analista para o chamado ${chamado.id}`
-      );
-
-      selectAnalista.add(
-        new Option(
-          "Selecione um analista",
-          ""
-        )
-      );
-
-      analistasDisponiveis
-        .filter(
-          (analistaDisponivel) =>
-            Number(analistaDisponivel.setor_id) ===
-            Number(chamado.setor_id)
-        )
-        .forEach((analistaDisponivel) => {
-          const opcao = new Option(
-            analistaDisponivel.nome,
-            String(analistaDisponivel.id)
-          );
-
-          selectAnalista.add(opcao);
-        });
-
-      if (chamado.analista_id) {
-        selectAnalista.value =
-          String(chamado.analista_id);
-      }
-
-      const botaoAtribuir = criarElemento(
-        "button",
-        "Atribuir chamado",
-        "secondary-button"
-      );
-
-      botaoAtribuir.type = "button";
-
-      botaoAtribuir.addEventListener(
-        "click",
-        async (event) => {
-          event.stopPropagation();
-
-          const analistaId =
-            Number(selectAnalista.value);
-
-          if (!analistaId) {
-            alert("Selecione um analista.");
-            return;
-          }
-
-          botaoAtribuir.disabled = true;
-          botaoAtribuir.textContent = "Atribuindo...";
-
-          try {
-            await API.post(
-              `/api/atendimentos/${encodeURIComponent(
-                chamado.id
-              )}/atribuir`,
-              {
-                analistaId
-              }
-            );
-
-            await carregarChamados();
-
-            if (
-              atendimentoSelecionado &&
-              Number(atendimentoSelecionado.id) ===
-              Number(chamado.id)
-            ) {
-              await carregarConversa(chamado.id);
-            }
-          } catch (erro) {
-            alert(erro.message);
-          } finally {
-            botaoAtribuir.disabled = false;
-            botaoAtribuir.textContent =
-              "Atribuir chamado";
-          }
-        }
-      );
-
-      const botaoDevolver = criarElemento(
-        "button",
-        "Devolver à fila",
-        "danger-outline-button"
-      );
-
-      botaoDevolver.type = "button";
-
-      botaoDevolver.hidden = visualizacao === "fila";
-
-      botaoDevolver.disabled =
-        !chamado.analista_id ||
-        chamado.status === "realizado";
-
-      botaoDevolver.title =
-        chamado.analista_id
-          ? "Remover o analista e devolver o chamado para a fila"
-          : "Este chamado já está na fila";
-
-      botaoDevolver.addEventListener(
-        "click",
-        async (event) => {
-          event.stopPropagation();
-
-          if (!chamado.analista_id) {
-            alert(
-              "Este chamado já está sem analista."
-            );
-            return;
-          }
-
-          if (chamado.status === "realizado") {
-            alert(
-              "Chamados realizados não podem ser devolvidos à fila."
-            );
-            return;
-          }
-
-          const confirmar = confirm(
-            `Deseja devolver o chamado #${chamado.id} para a fila?`
-          );
-
-          if (!confirmar) {
-            return;
-          }
-
-          botaoDevolver.disabled = true;
-          botaoDevolver.textContent =
-            "Devolvendo...";
-
-          try {
-            await API.post(
-              `/api/atendimentos/${encodeURIComponent(
-                chamado.id
-              )}/devolver-fila`
-            );
-
-            await carregarChamados();
-
-            if (
-              atendimentoSelecionado &&
-              Number(atendimentoSelecionado.id) ===
-              Number(chamado.id)
-            ) {
-              await carregarConversa(chamado.id);
-            }
-          } catch (erro) {
-            alert(erro.message);
-          } finally {
-            botaoDevolver.disabled =
-              !chamado.analista_id ||
-              chamado.status === "realizado";
-
-            botaoDevolver.textContent =
-              "Devolver à fila";
-          }
-        }
-      );
-
-      controleAtribuicao.append(
-        rotulo,
-        selectAnalista,
-        botaoAtribuir,
-        botaoDevolver
-      );
-    }
-
     const descricao = criarElemento(
       "p",
       chamado.descricao || "Sem descrição.",
       "fila-descricao"
     );
 
-    const controleStatus =
-      document.createElement("div");
+    const bolhaStatus = criarBolhaStatus(chamado.status);
 
-    controleStatus.className =
-      "ticket-status-controle";
+    let acoesFila = null;
+    if (estaNaFila) {
+      const conteudoFila = criarElemento("div", "", "fila-conteudo");
+      const cabecalhoFila = criarElemento("div", "", "fila-cabecalho");
+      const detalhesFila = criarElemento("div", "", "fila-detalhes");
+      const identificacaoFila = criarElemento("div", "", "fila-identificacao");
 
-    controleStatus.addEventListener(
-      "click",
-      (event) => {
-        event.stopPropagation();
+      identificacaoFila.append(numero, bolhaStatus);
+      cabecalhoFila.append(nome, identificacaoFila);
+
+      detalhesFila.append(setor, analista);
+      if (vinculoOrigem) detalhesFila.append(vinculoOrigem);
+      detalhesFila.append(descricao);
+
+      const dataCriacao = chamado.criado_em || chamado.data_criacao || chamado.created_at;
+      if (dataCriacao) {
+        const data = new Date(dataCriacao);
+        const textoData = Number.isNaN(data.getTime())
+          ? String(dataCriacao)
+          : data.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+        detalhesFila.append(criarElemento("p", `Recebido: ${textoData}`, "fila-data"));
       }
-    );
 
-    const selectStatus =
-      document.createElement("select");
+      conteudoFila.append(cabecalhoFila, detalhesFila);
+      card.append(conteudoFila);
+      acoesFila = criarElemento("div", "", "fila-acoes");
+    } else {
+      card.append(nome, numero, bolhaStatus, setor, analista, descricao);
+      if (vinculoOrigem) card.append(vinculoOrigem);
+    }
 
-    selectStatus.className =
-      "ticket-status-select";
+    const perfilSupervisor = usuarioAtual?.perfil === "supervisor";
+    const perfilAnalista = usuarioAtual?.perfil === "analista";
+    const estaEmMeus = visualizacao === "meus";
+    const atendimentoAtivo = statusNormalizado !== "realizado" && chamado.arquivado !== true;
 
-    selectStatus.setAttribute(
-      "aria-label",
-      `Alterar status do chamado ${chamado.id}`
-    );
-
-    const statusAtual = normalizarStatus(chamado.status);
-    const statusDisponiveis = [["aguardando", "Aguardando"], ["em_atendimento", "Em atendimento"], ["pendente", "Pendente"], ["realizado", "Realizado"]];
-    statusDisponiveis.forEach(([valor, texto]) => selectStatus.add(new Option(texto, valor)));
-    selectStatus.value = statusAtual;
-
-    const botaoStatus = criarElemento(
-      "button",
-      "Alterar status",
-      "secondary-button"
-    );
-
-    botaoStatus.type = "button";
-
-    botaoStatus.addEventListener(
-      "click",
-      async (event) => {
+    const adicionarBotaoRotina = (lista, texto, acao, classe = "") => {
+      const item = criarElemento("button", texto, `ticket-rotina-item ${classe}`.trim());
+      item.type = "button";
+      item.addEventListener("click", async (event) => {
         event.stopPropagation();
+        await acao();
+      });
+      lista.append(item);
+    };
 
-        const novoStatus =
-          selectStatus.value;
+    const criarMenuRotinas = (acoes) => {
+      const rotinas = document.createElement("details");
+      rotinas.className = "ticket-rotinas";
+      const resumo = document.createElement("summary");
+      resumo.textContent = "Rotinas";
+      const lista = document.createElement("div");
+      lista.className = "ticket-rotinas-lista";
+      rotinas.append(resumo, lista);
+      acoes(lista);
+      if (lista.children.length) (estaNaFila ? acoesFila : card).append(rotinas);
+    };
 
-        if (novoStatus === normalizarStatus(chamado.status)) {
-          return;
-        }
-
-        botaoStatus.disabled = true;
-        botaoStatus.textContent =
-          "Alterando...";
-
+    // Na fila, o supervisor pode assumir o atendimento e acessar as demais ações em Rotinas.
+    // O analista vê exclusivamente a ação de assumir atendimento.
+    if (estaNaFila && (perfilSupervisor || perfilAnalista)) {
+      const botaoAssumir = criarElemento("button", "Assumir atendimento", "primary-button ticket-assumir-atendimento");
+      botaoAssumir.type = "button";
+      botaoAssumir.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        botaoAssumir.disabled = true;
+        botaoAssumir.textContent = "Assumindo...";
         try {
-          await API.patch(
-            `/api/atendimentos/${encodeURIComponent(
-              chamado.id
-            )}/status`,
-            {
-              status: novoStatus
-            }
-          );
-
+          await API.post(`/api/atendimentos/${encodeURIComponent(chamado.id)}/assumir`, {});
           await carregarChamados();
-
-          if (novoStatus === "realizado" && atendimentoSelecionado &&
-            Number(atendimentoSelecionado.id) === Number(chamado.id)) {
-            atendimentoSelecionado = null;
-            mensagensAtendimento = [];
-            chatSection.hidden = true;
-          } else if (atendimentoSelecionado &&
-            Number(atendimentoSelecionado.id) === Number(chamado.id)) {
+          if (atendimentoSelecionado && Number(atendimentoSelecionado.id) === Number(chamado.id)) {
             await carregarConversa(chamado.id);
           }
         } catch (erro) {
           alert(erro.message);
-
-          selectStatus.value = normalizarStatus(chamado.status);
-        } finally {
-          botaoStatus.disabled = false;
-
-          botaoStatus.textContent =
-            "Alterar status";
+          botaoAssumir.disabled = false;
+          botaoAssumir.textContent = "Assumir atendimento";
         }
+      });
+      (estaNaFila ? acoesFila : card).append(botaoAssumir);
+
+      if (perfilSupervisor) {
+        criarMenuRotinas((lista) => {
+          adicionarBotaoRotina(lista, "Replicar atendimento", () => abrirModalReplicarAtendimento(chamado));
+          adicionarBotaoRotina(lista, "Alterar analista", () => abrirRotinaAlterarAnalista(chamado));
+        });
       }
-    );
-
-    controleStatus.append(
-      selectStatus,
-      botaoStatus
-    );
-
-    const bolhaStatus = criarBolhaStatus(chamado.status);
-
-    if (visualizacao === "meus" || (usuarioAtual?.perfil === "supervisor" && visualizacao === "fila")) {
-      const botaoReplicar = criarElemento("button", "Replicar atendimento", "secondary-button");
-      botaoReplicar.type = "button";
-      botaoReplicar.addEventListener("click", async (event) => {
-        event.stopPropagation();
-        await abrirModalReplicarAtendimento(chamado);
-      });
-      card.append(nome, numero, bolhaStatus, setor, analista, descricao, botaoReplicar);
-    } else {
-      card.append(nome, numero, bolhaStatus, setor, analista, descricao);
     }
 
-    if (controleAtribuicao) {
-      card.append(controleAtribuicao);
-    }
+    // Em Meus atendimentos, as ações variam conforme o perfil.
+    if (estaEmMeus && (perfilAnalista || perfilSupervisor)) {
+      criarMenuRotinas((lista) => {
+        const podeReplicarAnalista = perfilAnalista &&
+          Number(chamado.analista_id) === Number(usuarioAtual.id) &&
+          atendimentoAtivo;
+        const podeReplicarSupervisor = perfilSupervisor && atendimentoAtivo;
 
-    if (usuarioAtual?.perfil === "analista" && visualizacao === "meus" && Number(chamado.analista_id) === Number(usuarioAtual.id) && chamado.status !== "realizado") {
-      const botaoDevolverAnalista = criarElemento("button", "Devolver à fila", "danger-outline-button");
-      botaoDevolverAnalista.type = "button";
-      botaoDevolverAnalista.addEventListener("click", async (event) => {
-        event.stopPropagation();
-        if (!confirm(`Deseja devolver o chamado #${chamado.id} para a fila do setor ${chamado.setor_nome || "atual"}?`)) return;
-        botaoDevolverAnalista.disabled = true;
-        botaoDevolverAnalista.textContent = "Devolvendo...";
-        try {
-          await API.post(`/api/atendimentos/${encodeURIComponent(chamado.id)}/devolver-fila`);
-          if (atendimentoSelecionado && Number(atendimentoSelecionado.id) === Number(chamado.id)) {
-            atendimentoSelecionado = null;
-            mensagensAtendimento = [];
-            chatSection.hidden = true;
+        if (podeReplicarAnalista || podeReplicarSupervisor) {
+          adicionarBotaoRotina(lista, "Replicar atendimento", () => abrirModalReplicarAtendimento(chamado));
+        }
+
+        const podeEditarAnalista = perfilAnalista &&
+          Number(chamado.analista_id) === Number(usuarioAtual.id) &&
+          atendimentoAtivo;
+        const podeEditarSupervisor = perfilSupervisor && atendimentoAtivo;
+        if (podeEditarAnalista || podeEditarSupervisor) {
+          adicionarBotaoRotina(lista, "Editar atendimento", () => abrirModalEditarAtendimento(chamado));
+        }
+
+        if (perfilSupervisor) {
+          if (setoresDisponiveis.length) {
+            adicionarBotaoRotina(lista, "Alterar setor", () => abrirRotinaAlterarSetor(chamado));
           }
-          await carregarChamados();
-        } catch (erro) {
-          alert(erro.message);
-        } finally {
-          botaoDevolverAnalista.disabled = false;
-          botaoDevolverAnalista.textContent = "Devolver à fila";
+          adicionarBotaoRotina(lista, "Alterar analista", () => abrirRotinaAlterarAnalista(chamado));
+        }
+
+        const podeAlterarStatusAnalista = perfilAnalista &&
+          Number(chamado.analista_id) === Number(usuarioAtual.id) &&
+          statusNormalizado !== "realizado";
+        if (perfilSupervisor || podeAlterarStatusAnalista) {
+          adicionarBotaoRotina(lista, "Alterar status", () => abrirRotinaAlterarStatus(chamado));
+        }
+
+        const podeDevolverAnalista = perfilAnalista &&
+          Number(chamado.analista_id) === Number(usuarioAtual.id) &&
+          statusNormalizado !== "realizado";
+        const podeDevolverSupervisor = perfilSupervisor &&
+          Boolean(chamado.analista_id) &&
+          statusNormalizado !== "realizado";
+        if (podeDevolverAnalista || podeDevolverSupervisor) {
+          adicionarBotaoRotina(lista, "Devolver à fila", async () => {
+            if (!confirm(`Deseja devolver o atendimento #${chamado.id} para a fila do setor ${chamado.setor_nome || "atual"}?`)) return;
+            await API.post(`/api/atendimentos/${encodeURIComponent(chamado.id)}/devolver-fila`);
+            if (atendimentoSelecionado && Number(atendimentoSelecionado.id) === Number(chamado.id)) {
+              atendimentoSelecionado = null;
+              mensagensAtendimento = [];
+              chatSection.hidden = true;
+            }
+            await carregarChamados();
+          }, "ticket-rotina-perigo");
         }
       });
-      card.append(botaoDevolverAnalista);
-    }
-
-
-    if (usuarioAtual?.perfil === "supervisor" && visualizacao !== "fila" && setoresDisponiveis.length) {
-      card.append(criarControleAlterarSetor(chamado));
-    }
-
-    const analistaPodeAlterarStatus = usuarioAtual?.perfil === "analista" && visualizacao === "meus" && Number(chamado.analista_id) === Number(usuarioAtual.id) && statusNormalizado !== "realizado";
-    if ((usuarioAtual?.perfil === "supervisor" && visualizacao !== "fila") || analistaPodeAlterarStatus) {
-      card.append(controleStatus);
-    }
-
-    const podeEditarChamado = usuarioAtual?.perfil === "supervisor" || (usuarioAtual?.perfil === "analista" && visualizacao === "meus" && Number(chamado.analista_id) === Number(usuarioAtual.id));
-    if (podeEditarChamado && statusNormalizado !== "realizado") {
-      const botaoEditar = criarElemento("button", "Editar atendimento", "secondary-button");
-      botaoEditar.type = "button";
-      botaoEditar.addEventListener("click", async (event) => {
-        event.stopPropagation();
-        await abrirModalEditarAtendimento(chamado);
-      });
-      card.append(botaoEditar);
     }
 
     if (visualizacao === "meus" && chamado.analista_id) {
@@ -974,44 +919,8 @@ function renderizarChamados() {
       card.style.cursor = "default";
     }
 
-    if (
-      visualizacao === "fila" &&
-      usuarioAtual?.perfil === "analista"
-    ) {
-      const botao = criarElemento(
-        "button",
-        "Assumir chamado"
-      );
-
-      botao.addEventListener(
-        "click",
-        async (event) => {
-          event.stopPropagation();
-
-          botao.disabled = true;
-          botao.textContent =
-            "Assumindo...";
-
-          try {
-            await API.post(
-              `/api/atendimentos/${encodeURIComponent(
-                chamado.id
-              )}/assumir`,
-              {}
-            );
-
-            await carregarChamados();
-          } catch (erro) {
-            alert(erro.message);
-
-            botao.disabled = false;
-            botao.textContent =
-              "Assumir chamado";
-          }
-        }
-      );
-
-      card.append(botao);
+    if (estaNaFila && acoesFila && acoesFila.children.length) {
+      card.append(acoesFila);
     }
 
     destinoCard.append(card);
@@ -1876,7 +1785,8 @@ async function abrirModalReplicarAtendimento(chamado) {
   document.getElementById("novo-cliente-telefone").value = chamado.usuario_telefone || chamado.telefone || "";
   document.getElementById("novo-cliente-cnpj").value = chamado.cnpj || chamado.empresa_cnpj || "";
   document.getElementById("novo-atendimento-descricao").value = chamado.descricao || "";
-  document.getElementById("novo-cliente-nome").readOnly = true;
+  // Na replicação, permite personalizar o nome do novo atendimento.
+  document.getElementById("novo-cliente-nome").readOnly = false;
   document.getElementById("novo-cliente-telefone").readOnly = true;
   document.getElementById("novo-cliente-cnpj").readOnly = true;
   document.getElementById("abrir-setor-container").hidden = false;

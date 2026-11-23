@@ -18,19 +18,19 @@ async function incluirDadosClientes(registros) {
   const [usuariosResult, empresasResult] = await Promise.all([
     usuarioIds.length
       ? clientes.query(
-          `SELECT id, nome, telefone, whatsapp_id, empresa_id
+        `SELECT id, nome, telefone, whatsapp_id, empresa_id
              FROM wb_usuarios
             WHERE id = ANY($1::bigint[])`,
-          [usuarioIds]
-        )
+        [usuarioIds]
+      )
       : Promise.resolve({ rows: [] }),
     empresaIds.length
       ? clientes.query(
-          `SELECT id, cnpj, razao_social, nome_fantasia, status
+        `SELECT id, cnpj, razao_social, nome_fantasia, status
              FROM wb_empresas
             WHERE id = ANY($1::bigint[])`,
-          [empresaIds]
-        )
+        [empresaIds]
+      )
       : Promise.resolve({ rows: [] })
   ]);
 
@@ -40,12 +40,16 @@ async function incluirDadosClientes(registros) {
   return registros.map(registro => {
     const usuario = usuarios.get(String(registro.usuario_id));
     const empresa = empresas.get(String(registro.empresa_id));
+
+    const nomeExibicao =
+      registro.usuario_nome?.trim() || usuario?.nome || null;
+
     return {
       ...registro,
-      usuario_nome: usuario?.nome ?? null,
+      usuario_nome: nomeExibicao,
       usuario_telefone: usuario?.telefone ?? null,
       usuario_whatsapp_id: usuario?.whatsapp_id ?? null,
-      cliente_nome: usuario?.nome ?? null,
+      cliente_nome: nomeExibicao,
       cliente_telefone: usuario?.telefone ?? null,
       cnpj: empresa?.cnpj ?? null,
       empresa_cnpj: empresa?.cnpj ?? null,
@@ -55,18 +59,75 @@ async function incluirDadosClientes(registros) {
   });
 }
 
+
 async function criar({
-  usuarioId, setorId, empresaId, descricao, protocolo,
+  usuarioId,
+  usuarioNome,
+  setorId,
+  empresaId,
+  cnpj,
+  descricao,
   atendimentoOrigemId = null
 }) {
-  const resultado = await atendimento.query(
-    `INSERT INTO wb_atendimentos
-       (usuario_id, setor_id, empresa_id, descricao, protocolo, atendimento_origem_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [usuarioId, setorId, empresaId, descricao, protocolo, atendimentoOrigemId]
-  );
-  return resultado.rows[0];
+  const cnpjLimpo = String(cnpj || "").replace(/\\D/g, "");
+
+  if (cnpjLimpo.length !== 14) {
+    throw new Error("CNPJ_INVALIDO_PARA_GERAR_PROTOCOLO");
+  }
+
+  const client = await atendimento.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // O ano é obtido no fuso de Brasília para manter a regra anual do sistema.
+    const anoResult = await client.query(
+      `SELECT EXTRACT(
+                YEAR FROM CURRENT_TIMESTAMP AT TIME ZONE 'America/Sao_Paulo'
+              )::integer AS ano`
+    );
+    const ano = Number(anoResult.rows[0].ano);
+
+    // O UPSERT serializa a numeração por empresa/ano, evitando duplicidade
+    // mesmo quando dois atendimentos são abertos simultaneamente.
+    const sequenciaResult = await client.query(
+      `INSERT INTO wb_controle_protocolos
+         (empresa_id, ano, ultimo_numero)
+       VALUES ($1, $2, 1)
+       ON CONFLICT (empresa_id, ano)
+       DO UPDATE SET ultimo_numero = wb_controle_protocolos.ultimo_numero + 1
+       RETURNING ultimo_numero`,
+      [empresaId, ano]
+    );
+
+    const numero = Number(sequenciaResult.rows[0].ultimo_numero);
+    const protocolo = `${ano}${cnpjLimpo}${String(numero).padStart(4, "0")}`;
+
+    const resultado = await client.query(
+      `INSERT INTO wb_atendimentos
+         (usuario_id, usuario_nome, setor_id, empresa_id,
+          descricao, protocolo, atendimento_origem_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        usuarioId,
+        usuarioNome || null,
+        setorId,
+        empresaId,
+        descricao,
+        protocolo,
+        atendimentoOrigemId
+      ]
+    );
+
+    await client.query("COMMIT");
+    return resultado.rows[0];
+  } catch (erro) {
+    await client.query("ROLLBACK");
+    throw erro;
+  } finally {
+    client.release();
+  }
 }
 
 async function buscarPorId(id) {
@@ -286,19 +347,28 @@ async function alterarSetor({ atendimentoId, setorId }) {
   return resultado.rows[0] || null;
 }
 
-async function editarDados({ atendimentoId, setorId, descricao }) {
+async function editarDados({
+  atendimentoId,
+  nome,
+  setorId,
+  descricao
+}) {
   const resultado = await atendimento.query(
     `UPDATE wb_atendimentos
-        SET setor_id = $2, descricao = $3,
-            analista_id = CASE WHEN setor_id <> $2 THEN NULL ELSE analista_id END,
-            status = CASE WHEN setor_id <> $2 THEN 'aguardando' ELSE status END,
-            iniciado_em = CASE WHEN setor_id <> $2 THEN NULL ELSE iniciado_em END,
-            finalizado_em = CASE WHEN setor_id <> $2 THEN NULL ELSE finalizado_em END,
+        SET usuario_nome = $2,
+            setor_id = $3,
+            descricao = $4,
+            analista_id = CASE WHEN setor_id <> $3 THEN NULL ELSE analista_id END,
+            status = CASE WHEN setor_id <> $3 THEN 'aguardando' ELSE status END,
+            iniciado_em = CASE WHEN setor_id <> $3 THEN NULL ELSE iniciado_em END,
+            finalizado_em = CASE WHEN setor_id <> $3 THEN NULL ELSE finalizado_em END,
             atualizado_em = CURRENT_TIMESTAMP
-      WHERE id = $1 AND arquivado = FALSE
+      WHERE id = $1
+        AND arquivado = FALSE
       RETURNING *`,
-    [atendimentoId, setorId, descricao]
+    [atendimentoId, nome, setorId, descricao]
   );
+
   return resultado.rows[0] || null;
 }
 
