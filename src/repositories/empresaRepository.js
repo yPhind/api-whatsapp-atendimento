@@ -26,10 +26,31 @@ async function buscarPorId(id) {
 
 async function listarAtivas() {
   const resultado = await clientes.query(
-    `SELECT id, cnpj, razao_social, nome_fantasia, status
-       FROM wb_empresas
-      WHERE status = 'Ativa'
-      ORDER BY COALESCE(NULLIF(nome_fantasia, ''), razao_social) ASC`
+    `SELECT
+       e.id,
+       e.cnpj,
+       e.razao_social,
+       e.nome_fantasia,
+       e.chave,
+       CASE WHEN COALESCE(e.chave, 0) > 0 THEN 'Ativo' ELSE 'Inativo' END AS status,
+       e.max_licencas,
+       e.quantidade_notas,
+       e.ultima_sincronizacao,
+       COALESCE(
+         json_agg(
+           json_build_object(
+             'id', m.id,
+             'codigo', m.codigo,
+             'nome', m.nome
+           ) ORDER BY m.nome
+         ) FILTER (WHERE m.id IS NOT NULL),
+         '[]'::json
+       ) AS modulos
+     FROM wb_empresas e
+     LEFT JOIN wb_empresa_modulos em ON em.empresa_id = e.id AND em.ativo = TRUE
+     LEFT JOIN wb_modulos m ON m.id = em.modulo_id AND m.ativo = TRUE
+     GROUP BY e.id
+     ORDER BY COALESCE(NULLIF(e.nome_fantasia, ''), e.razao_social) ASC`
   );
 
   return resultado.rows;

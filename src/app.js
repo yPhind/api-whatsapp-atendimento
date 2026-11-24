@@ -11,6 +11,7 @@ const relatorioRoutes = require('./routes/relatorioRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const tarefaRoutes = require('./routes/tarefaRoutes');
 const permissaoRoutes = require('./routes/permissaoRoutes');
+const empresaRoutes = require('./routes/empresaRoutes');
 
 
 const app = express();
@@ -51,6 +52,7 @@ app.use("/api/relatorios", relatorioRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/tarefas", tarefaRoutes);
 app.use("/api/permissoes", permissaoRoutes);
+app.use("/api/empresas", empresaRoutes);
 
 app.use((error, req, res, next) => {
   console.error('Erro na API:', error.message);

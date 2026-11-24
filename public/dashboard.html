@@ -5,7 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Painel de Atendimento</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css">\n
+  <link rel="stylesheet" href="/css/clientes-permissoes.css">
 </head>
 
 <body>
@@ -25,6 +26,13 @@
             <rect x="14" y="12" width="7" height="9" />
             <rect x="3" y="16" width="7" height="5" />
           </svg> Início
+        </button>
+
+        <button class="nav-button" data-view="clientes" id="nav-clientes" hidden>
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 5h18v14H3z" />
+            <path d="M3 9h18M8 5v14" />
+          </svg> Clientes
         </button>
 
         <button class="nav-button" data-view="fila">
@@ -70,6 +78,13 @@
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
             <path d="M14 2v6h6M8 13h8M8 17h8" />
           </svg> Tabela de Logs
+        </button>
+
+        <button class="nav-button" data-view="permissoes" id="nav-permissoes" hidden>
+          <svg class="sidebar-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg> Painel de Permissões
         </button>
 
         <div class="sidebar-footer">
@@ -120,8 +135,12 @@
                 <h3>Atendimentos por setor e status</h3>
                 <p>Quantidade atual em cada setor.</p>
               </div>
-              <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="grafico-atendimentos-setor" aria-label="Ampliar gráfico de atendimentos por setor" title="Ampliar gráfico">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+              <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="grafico-atendimentos-setor"
+                aria-label="Ampliar gráfico de atendimentos por setor" title="Ampliar gráfico">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="10.8" cy="10.8" r="6.8"></circle>
+                  <path d="m16 16 5 5"></path>
+                </svg>
               </button>
             </div>
             <div id="grafico-atendimentos-setor" class="inicio-grafico-area" role="img"
@@ -135,8 +154,12 @@
                 <h3>Distribuição por status</h3>
                 <p>Participação de cada status no total atual.</p>
               </div>
-              <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="grafico-distribuicao-status" aria-label="Ampliar gráfico de distribuição por status" title="Ampliar gráfico">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+              <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="grafico-distribuicao-status"
+                aria-label="Ampliar gráfico de distribuição por status" title="Ampliar gráfico">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="10.8" cy="10.8" r="6.8"></circle>
+                  <path d="m16 16 5 5"></path>
+                </svg>
               </button>
             </div>
             <div id="grafico-distribuicao-status" class="inicio-grafico-area" role="img"
@@ -150,11 +173,16 @@
           <div class="inicio-grafico-cabecalho">
             <div class="inicio-grafico-cabecalho-texto">
               <h3>Volume mensal por setor</h3>
-              <p>Últimos 12 meses, separados por status. Os atendimentos em andamento são agrupados pelo mês de abertura;
+              <p>Últimos 12 meses, separados por status. Os atendimentos em andamento são agrupados pelo mês de
+                abertura;
                 os realizados, pelo mês de finalização.</p>
             </div>
-            <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="graficos-mensais-setor" aria-label="Ampliar gráfico mensal por setor" title="Ampliar gráfico">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+            <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="graficos-mensais-setor"
+              aria-label="Ampliar gráfico mensal por setor" title="Ampliar gráfico">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="10.8" cy="10.8" r="6.8"></circle>
+                <path d="m16 16 5 5"></path>
+              </svg>
             </button>
           </div>
           <div id="graficos-mensais-setor" class="inicio-graficos-mensais">
@@ -393,7 +421,9 @@
         </div>
 
         <div class="filtros-tabela filtros-historico" id="historico-filtros">
-          <label class="filtro-historico-atendimento">Atendimento e protocolo<input type="search" data-filtro-historico="atendimento" placeholder="Nº do chamado ou protocolo" aria-label="Filtrar pelo número do chamado ou protocolo"></label>
+          <label class="filtro-historico-atendimento">Atendimento e protocolo<input type="search"
+              data-filtro-historico="atendimento" placeholder="Nº do chamado ou protocolo"
+              aria-label="Filtrar pelo número do chamado ou protocolo"></label>
           <label>Cliente<input type="search" data-filtro-historico="cliente" placeholder="Nome do cliente"></label>
           <label>Analista<input type="search" data-filtro-historico="analista" placeholder="Nome do analista"></label>
           <label>Setor<input type="search" data-filtro-historico="setor" placeholder="Setor"></label>
@@ -430,6 +460,62 @@
           </div>
         </div>
       </div>
+
+      <section id="clientes-section" class="clientes-section" hidden>
+        <div class="clientes-cabecalho">
+          <div>
+            <h2>Clientes</h2>
+            <p>Consulta das empresas cadastradas e ativas.</p>
+          </div>
+          <button type="button" id="clientes-atualizar" class="secondary-button">Atualizar lista</button>
+        </div>
+        <div class="clientes-toolbar">
+          <input type="search" id="clientes-busca" placeholder="Buscar por razão social, nome fantasia ou CNPJ">
+          <span id="clientes-resumo" class="clientes-resumo"></span>
+        </div>
+        <div id="clientes-lista" class="clientes-lista">
+          <p>Carregando clientes...</p>
+        </div>
+      </section>
+
+      <section id="permissoes-section" class="permissoes-section" hidden>
+        <div class="permissoes-cabecalho">
+          <div>
+            <h2>Painel de Permissões</h2>
+            <p>Configure o padrão do perfil Analista ou personalize os acessos de uma pessoa específica.</p>
+          </div>
+          <span class="permissoes-perfil-tag">Acesso administrativo</span>
+        </div>
+        <div class="permissoes-selecao">
+          <label class="permissoes-campo" for="permissoes-escopo">
+            Tipo de configuração
+            <select id="permissoes-escopo">
+              <option value="papel">Padrão de todos os analistas</option>
+              <option value="usuario">Personalizar um analista</option>
+            </select>
+          </label>
+          <label class="permissoes-campo" id="permissoes-analista-campo" for="permissoes-analista-select" hidden>
+            Selecionar analista
+            <select id="permissoes-analista-select">
+              <option value="">Carregando analistas...</option>
+            </select>
+          </label>
+        </div>
+        <div id="permissoes-aviso" class="permissoes-aviso">
+          <strong>Padrão do perfil:</strong> alterações aqui afetam todos os analistas, exceto aqueles com uma regra
+          individual específica.
+        </div>
+        <div id="permissoes-mensagem" class="permissoes-mensagem" role="status" aria-live="polite"></div>
+        <div id="permissoes-carregando" class="permissoes-carregando">Carregando permissões cadastradas...</div>
+        <div id="permissoes-grupos" class="permissoes-grupos"></div>
+        <div class="permissoes-acoes">
+          <span id="permissoes-contador" class="permissoes-contador">Nenhuma permissão carregada</span>
+          <div>
+            <button type="button" id="permissoes-recarregar" class="secondary-button">Descartar alterações</button>
+            <button type="button" id="permissoes-salvar" class="primary-button" disabled>Salvar permissões</button>
+          </div>
+        </div>
+      </section>
 
       <section id="logs-section" class="tickets-section" hidden>
 
@@ -674,6 +760,7 @@
   <script src="/js/api.js"></script>
   <script src="/js/dashboardCharts.js"></script>
   <script src="/js/dashboard.js"></script>
+  <script src="/js/clientesPermissoes.js"></script>
 </body>
 
 </html>

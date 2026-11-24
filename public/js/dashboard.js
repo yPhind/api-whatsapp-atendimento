@@ -40,6 +40,8 @@ const modalHistoricoTitulo = document.getElementById("modal-historico-titulo");
 const modalHistoricoMensagens = document.getElementById("modal-historico-mensagens");
 const fecharModalHistorico = document.getElementById("fechar-modal-historico");
 const logsSection = document.getElementById("logs-section");
+const permissoesSection = document.getElementById("permissoes-section");
+const clientesSection = document.getElementById("clientes-section");
 const tarefasSection = document.getElementById("tarefas-section");
 const logsLista = document.getElementById("logs-lista");
 
@@ -127,7 +129,10 @@ async function carregarPerfil() {
   const menus = {
     "nav-usuarios": !ehSupervisor,
     "nav-historico": false,
-    "nav-logs": !ehSupervisor
+    "nav-logs": !ehSupervisor,
+    // Clientes e Permissões ficam disponíveis no painel do Supervisor.
+    "nav-clientes": !ehSupervisor,
+    "nav-permissoes": !ehSupervisor
   };
 
   for (const [id, ocultar] of Object.entries(menus)) {
@@ -920,12 +925,334 @@ function renderizarChamados() {
 }
 
 
+
+const modulosClientes = {};
+let empresasPainel = [];
+
+function formatarCnpjPainel(valor) {
+  const n = String(valor || "").replace(/\\D/g, "");
+  if (n.length !== 14) return valor || "Não informado";
+  return n.replace(/^(\\d{2})(\\d)/, "$1.$2")
+    .replace(/^(\\d{2})\\.(\\d{3})(\\d)/, "$1.$2.$3")
+    .replace(/\\.(\\d{3})(\\d)/, ".$1/$2")
+    .replace(/(\\d{4})(\\d{1,2})$/, "$1-$2");
+}
+
+function renderizarClientesPainel() {
+  const area = document.getElementById("clientes-lista");
+  const resumo = document.getElementById("clientes-resumo");
+  if (!area) return;
+  const termo = (document.getElementById("clientes-busca")?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtradas = empresasPainel.filter((empresa) =>
+    [empresa.cnpj, empresa.razao_social, empresa.nome_fantasia, empresa.status]
+      .filter(Boolean).join(" ").toLocaleLowerCase("pt-BR").includes(termo)
+  );
+  area.replaceChildren();
+  if (resumo) resumo.textContent = `${filtradas.length} empresa(s) encontrada(s) · ${empresasPainel.length} ativa(s) cadastrada(s)`;
+  if (!filtradas.length) {
+    area.append(criarElemento("p", termo ? "Nenhum cliente corresponde à busca." : "Nenhum cliente ativo cadastrado."));
+    return;
+  }
+  const wrapper = criarElemento("div", "", "analistas-tabela-wrapper");
+  const tabela = document.createElement("table");
+  tabela.className = "analistas-tabela";
+  const thead = document.createElement("thead");
+  const trh = document.createElement("tr");
+  ["Razão social", "Nome fantasia", "CNPJ", "Situação"].forEach((t) => trh.append(criarElemento("th", t)));
+  thead.append(trh);
+  const tbody = document.createElement("tbody");
+  filtradas.forEach((empresa) => {
+    const tr = document.createElement("tr");
+    tr.append(
+      criarElemento("td", empresa.razao_social || "Não informada"),
+      criarElemento("td", empresa.nome_fantasia || "—"),
+      criarElemento("td", formatarCnpjPainel(empresa.cnpj)),
+      criarElemento("td", empresa.status || "Não informado")
+    );
+    tbody.append(tr);
+  });
+  tabela.append(thead, tbody);
+  wrapper.append(tabela);
+  area.append(wrapper);
+}
+
+async function carregarClientesPainel() {
+  const area = document.getElementById("clientes-lista");
+  if (area) area.replaceChildren(criarElemento("p", "Carregando clientes..."));
+  try {
+    const resposta = await API.get("/api/empresas");
+    empresasPainel = Array.isArray(resposta.empresas) ? resposta.empresas : [];
+    renderizarClientesPainel();
+  } catch (erro) {
+    if (area) area.replaceChildren(criarElemento("p", erro.message || "Não foi possível carregar os clientes.", "error-message"));
+  }
+}
+
+document.getElementById("clientes-busca")?.addEventListener("input", renderizarClientesPainel);
+document.getElementById("clientes-atualizar")?.addEventListener("click", carregarClientesPainel);
+
+
+const rotulosModulosPermissao = {
+  inicio: "Início",
+  fila: "Fila de atendimentos",
+  meus: "Meus atendimentos",
+  historico: "Histórico",
+  logs: "Logs",
+  clientes: "Clientes",
+  usuarios: "Usuários",
+  tarefas: "Tarefas",
+  atendimento: "Atendimento"
+};
+
+let modoPermissoes = "papel";
+let analistasPermissoes = [];
+let usuarioPermissoesSelecionado = "";
+let permissoesOriginaisConfiguracao = [];
+
+function tokenAutenticacao() {
+  return sessionStorage.getItem("token");
+}
+
+function endpointPermissoesAtual() {
+  return modoPermissoes === "papel"
+    ? "/api/permissoes/analista"
+    : `/api/permissoes/usuarios/${encodeURIComponent(usuarioPermissoesSelecionado)}`;
+}
+
+async function requisicaoPermissoes(metodo, corpo, endpoint = endpointPermissoesAtual()) {
+  const resposta = await fetch(endpoint, {
+    method: metodo,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${tokenAutenticacao()}`
+    },
+    ...(corpo ? { body: JSON.stringify(corpo) } : {})
+  });
+  const dados = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) {
+    throw new Error(dados.mensagem || dados.erro || `Falha ao consultar permissões (HTTP ${resposta.status}).`);
+  }
+  return dados;
+}
+
+function lerPermissoesDaTela() {
+  if (modoPermissoes === "papel") {
+    return [...document.querySelectorAll("#permissoes-grupos input[data-permissao]")]
+      .map((caixa) => ({ codigo: caixa.dataset.permissao, permitido: caixa.checked }));
+  }
+  return [...document.querySelectorAll("#permissoes-grupos select[data-permissao]")]
+    .map((select) => ({
+      codigo: select.dataset.permissao,
+      permitido: select.value === "herdar" ? null : select.value === "permitir"
+    }));
+}
+
+function atualizarResumoPermissoes() {
+  const permissoes = lerPermissoesDaTela();
+  const contador = document.getElementById("permissoes-contador");
+  const botaoSalvar = document.getElementById("permissoes-salvar");
+  const habilitadas = permissoes.filter((item) => {
+    if (modoPermissoes === "papel") return item.permitido === true;
+    return item.permitido === true;
+  }).length;
+  const personalizadas = permissoes.filter((item) => item.permitido !== null).length;
+  if (contador) {
+    contador.textContent = modoPermissoes === "papel"
+      ? `${habilitadas} de ${permissoes.length} permissões habilitadas para o perfil`
+      : `${habilitadas} liberadas · ${permissoes.length - habilitadas - (permissoes.length - personalizadas)} bloqueadas · ${permissoes.length - personalizadas} herdadas`;
+  }
+  if (botaoSalvar) {
+    const atuais = permissoes.slice().sort((a, b) => a.codigo.localeCompare(b.codigo));
+    const originais = permissoesOriginaisConfiguracao.slice().sort((a, b) => a.codigo.localeCompare(b.codigo));
+    botaoSalvar.disabled = !permissoes.length || JSON.stringify(atuais) === JSON.stringify(originais);
+  }
+}
+
+function renderizarConfiguracaoPermissoes(configuracao) {
+  const permissoes = configuracao.permissoes || [];
+  permissoesOriginaisConfiguracao = permissoes.map((item) => ({
+    codigo: item.codigo,
+    permitido: modoPermissoes === "papel"
+      ? item.permitido === true
+      : (item.override === undefined ? null : item.override)
+  }));
+
+  const grupos = document.getElementById("permissoes-grupos");
+  const carregando = document.getElementById("permissoes-carregando");
+  grupos.replaceChildren();
+  carregando.hidden = true;
+
+  const porModulo = new Map();
+  permissoes.forEach((permissao) => {
+    const modulo = permissao.modulo || String(permissao.codigo || "outros").split(".")[0];
+    if (!porModulo.has(modulo)) porModulo.set(modulo, []);
+    porModulo.get(modulo).push(permissao);
+  });
+
+  [...porModulo.entries()].sort((a, b) => a[0].localeCompare(b[0], "pt-BR")).forEach(([modulo, itens]) => {
+    const card = document.createElement("article");
+    card.className = "permissao-grupo";
+    const titulo = document.createElement("h3");
+    titulo.textContent = rotulosModulosPermissao[modulo] || modulo.replaceAll("_", " ");
+    card.append(titulo);
+
+    itens.forEach((permissao) => {
+      const linha = document.createElement("div");
+      linha.className = "permissao-item";
+      const texto = document.createElement("div");
+      texto.className = "permissao-item-texto";
+      const nome = document.createElement("strong");
+      nome.textContent = permissao.descricao || permissao.acao || permissao.codigo;
+      const codigo = document.createElement("small");
+      codigo.textContent = permissao.codigo;
+      texto.append(nome, codigo);
+
+      if (modoPermissoes === "papel") {
+        const label = document.createElement("label");
+        label.className = "permissao-switch";
+        label.setAttribute("aria-label", `Permitir ${permissao.descricao || permissao.codigo}`);
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.checked = permissao.permitido === true;
+        input.dataset.permissao = permissao.codigo;
+        input.addEventListener("change", atualizarResumoPermissoes);
+        const trilho = document.createElement("span");
+        label.append(input, trilho);
+        linha.append(texto, label);
+      } else {
+        const seletor = document.createElement("select");
+        seletor.className = "permissao-individual-select";
+        seletor.dataset.permissao = permissao.codigo;
+        seletor.setAttribute("aria-label", `Permissão individual: ${permissao.descricao || permissao.codigo}`);
+        seletor.add(new Option("Herdar padrão", "herdar"));
+        seletor.add(new Option("Liberar", "permitir"));
+        seletor.add(new Option("Bloquear", "bloquear"));
+        seletor.value = permissao.override === null || permissao.override === undefined
+          ? "herdar"
+          : (permissao.override ? "permitir" : "bloquear");
+        seletor.addEventListener("change", atualizarResumoPermissoes);
+        const origem = criarElemento("small", `Acesso efetivo: ${permissao.permitido ? "liberado" : "bloqueado"} · ${permissao.origem === "individual" ? "regra individual" : "padrão do perfil"}`, "permissao-origem");
+        texto.append(origem);
+        linha.append(texto, seletor);
+      }
+      card.append(linha);
+    });
+    grupos.append(card);
+  });
+  atualizarResumoPermissoes();
+}
+
+async function carregarListaAnalistasPermissoes() {
+  const seletor = document.getElementById("permissoes-analista-select");
+  const resposta = await fetch("/api/analistas", {
+    headers: { Authorization: `Bearer ${tokenAutenticacao()}` }
+  });
+  const dados = await resposta.json().catch(() => ({}));
+  if (!resposta.ok) throw new Error(dados.mensagem || dados.erro || "Não foi possível listar os analistas.");
+  analistasPermissoes = Array.isArray(dados.analistas) ? dados.analistas : [];
+  seletor.replaceChildren(new Option("Selecione um analista", ""));
+  analistasPermissoes.forEach((analista) => {
+    const situacao = analista.ativo === false ? " (inativo)" : "";
+    seletor.add(new Option(`${analista.nome || analista.username || `Analista ${analista.id}`}${situacao}`, String(analista.id)));
+  });
+  if (usuarioPermissoesSelecionado && analistasPermissoes.some((item) => String(item.id) === usuarioPermissoesSelecionado)) {
+    seletor.value = usuarioPermissoesSelecionado;
+  }
+}
+
+async function carregarConfiguracaoPermissoes() {
+  const mensagem = document.getElementById("permissoes-mensagem");
+  const carregando = document.getElementById("permissoes-carregando");
+  const grupos = document.getElementById("permissoes-grupos");
+  mensagem.textContent = "";
+  mensagem.className = "permissoes-mensagem";
+  carregando.hidden = false;
+  grupos.replaceChildren();
+  document.getElementById("permissoes-salvar").disabled = true;
+  if (modoPermissoes === "usuario" && !usuarioPermissoesSelecionado) {
+    carregando.hidden = true;
+    mensagem.textContent = "Selecione um analista para configurar as permissões individuais.";
+    return;
+  }
+  try {
+    const dados = await requisicaoPermissoes("GET");
+    const configuracao = modoPermissoes === "papel" ? dados.papel : dados;
+    if (!configuracao || !Array.isArray(configuracao.permissoes)) {
+      throw new Error("A API não retornou a lista de permissões esperada.");
+    }
+    renderizarConfiguracaoPermissoes(configuracao);
+    if (modoPermissoes === "usuario" && configuracao.usuario) {
+      mensagem.textContent = `Configurando acessos individuais de ${configuracao.usuario.nome}.`;
+    }
+  } catch (erro) {
+    carregando.hidden = true;
+    mensagem.textContent = erro.message;
+    mensagem.className = "permissoes-mensagem erro";
+  }
+}
+
+async function salvarConfiguracaoPermissoes() {
+  const botao = document.getElementById("permissoes-salvar");
+  const mensagem = document.getElementById("permissoes-mensagem");
+  const permissoes = lerPermissoesDaTela();
+  botao.disabled = true;
+  botao.textContent = "Salvando...";
+  mensagem.textContent = "";
+  mensagem.className = "permissoes-mensagem";
+  try {
+    const dados = await requisicaoPermissoes("PUT", { permissoes });
+    const configuracao = modoPermissoes === "papel" ? dados.papel : dados;
+    if (!configuracao || !Array.isArray(configuracao.permissoes)) {
+      throw new Error("A API não confirmou a atualização das permissões.");
+    }
+    renderizarConfiguracaoPermissoes(configuracao);
+    mensagem.textContent = dados.mensagem || "Permissões atualizadas com sucesso.";
+    mensagem.className = "permissoes-mensagem sucesso";
+  } catch (erro) {
+    mensagem.textContent = erro.message;
+    mensagem.className = "permissoes-mensagem erro";
+    atualizarResumoPermissoes();
+  } finally {
+    botao.textContent = "Salvar permissões";
+    atualizarResumoPermissoes();
+  }
+}
+
+async function alterarEscopoPermissoes() {
+  modoPermissoes = document.getElementById("permissoes-escopo").value;
+  const campoAnalista = document.getElementById("permissoes-analista-campo");
+  const aviso = document.getElementById("permissoes-aviso");
+  campoAnalista.hidden = modoPermissoes !== "usuario";
+  aviso.innerHTML = modoPermissoes === "papel"
+    ? "<strong>Padrão do perfil:</strong> alterações aqui afetam todos os analistas, exceto aqueles com uma regra individual específica."
+    : "<strong>Permissões individuais:</strong> escolha “Herdar padrão” para acompanhar as permissões gerais do perfil. “Liberar” e “Bloquear” criam exceções somente para o analista selecionado.";
+  if (modoPermissoes === "usuario") {
+    try {
+      await carregarListaAnalistasPermissoes();
+    } catch (erro) {
+      const mensagem = document.getElementById("permissoes-mensagem");
+      mensagem.textContent = erro.message;
+      mensagem.className = "permissoes-mensagem erro";
+    }
+  }
+  await carregarConfiguracaoPermissoes();
+}
+
+document.getElementById("permissoes-salvar")?.addEventListener("click", salvarConfiguracaoPermissoes);
+document.getElementById("permissoes-recarregar")?.addEventListener("click", carregarConfiguracaoPermissoes);
+document.getElementById("permissoes-escopo")?.addEventListener("change", alterarEscopoPermissoes);
+document.getElementById("permissoes-analista-select")?.addEventListener("change", async (event) => {
+  usuarioPermissoesSelecionado = event.target.value;
+  await carregarConfiguracaoPermissoes();
+});
+
+
 document.querySelectorAll(".nav-button").forEach((botao) => {
   botao.addEventListener("click", async () => {
     const novaVisualizacao = botao.dataset.view;
 
     if (
-      ["usuarios", "logs"].includes(novaVisualizacao) &&
+      ["usuarios", "logs", "permissoes"].includes(novaVisualizacao) &&
       usuarioAtual?.perfil !== "supervisor"
     ) {
       return;
@@ -945,6 +1272,8 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
     const gerenciandoUsuarios = visualizacao === "usuarios";
     const gerenciandoHistorico = visualizacao === "historico";
     const gerenciandoLogs = visualizacao === "logs";
+    const gerenciandoPermissoes = visualizacao === "permissoes";
+    const gerenciandoClientes = visualizacao === "clientes";
     const gerenciandoTarefas = visualizacao === "tarefas";
     const meus = visualizacao === "meus";
 
@@ -952,6 +1281,8 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
     usuariosSection.hidden = !gerenciandoUsuarios;
     historicoSection.hidden = !gerenciandoHistorico;
     logsSection.hidden = !gerenciandoLogs;
+    permissoesSection.hidden = !gerenciandoPermissoes;
+    clientesSection.hidden = !gerenciandoClientes;
     tarefasSection.hidden = !gerenciandoTarefas;
 
     ticketsSection.hidden =
@@ -959,6 +1290,8 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
       gerenciandoUsuarios ||
       gerenciandoHistorico ||
       gerenciandoLogs ||
+      gerenciandoPermissoes ||
+      gerenciandoClientes ||
       gerenciandoTarefas;
 
     const metricas = document.querySelector(".metrics");
@@ -971,6 +1304,8 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
       gerenciandoUsuarios ||
       gerenciandoHistorico ||
       gerenciandoLogs ||
+      gerenciandoPermissoes ||
+      gerenciandoClientes ||
       gerenciandoTarefas;
 
     metricas.hidden = telaAdministrativa;
@@ -1001,6 +1336,18 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
       title.textContent = "Tabela de Logs";
       sectionTitle.textContent = "Logs do sistema";
       await carregarLogs();
+      return;
+    }
+ 
+    if (gerenciandoPermissoes) {
+      title.textContent = "Painel de Permissões";
+      await carregarConfiguracaoPermissoes();
+      return;
+    }
+
+    if (gerenciandoClientes) {
+      title.textContent = "Clientes";
+      await carregarClientesPainel();
       return;
     }
 
@@ -2403,7 +2750,9 @@ function desenharTabelaAnalistas() {
     redefinirSenha.disabled = !ativo;
     redefinirSenha.title = ativo ? "Gerar senha temporária" : "Usuário inativo";
     redefinirSenha.addEventListener("click", async () => {
-      if (!confirm(`Deseja realmente redefinir a senha de ${analista.nome}?\n\nUma nova senha temporária será gerada e a senha atual deixará de funcionar.`)) return;
+      if (!confirm(`Deseja realmente redefinir a senha de ${analista.nome}?
+
+Uma nova senha temporária será gerada e a senha atual deixará de funcionar.`)) return;
       redefinirSenha.disabled = true;
       redefinirSenha.textContent = "Gerando...";
       try {
