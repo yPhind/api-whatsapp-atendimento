@@ -8,7 +8,7 @@ async function obterIndicadores(setorId = null) {
        (COUNT(a.id) FILTER (WHERE a.status = 'aguardando'))::integer AS aguardando,
        (COUNT(a.id) FILTER (WHERE a.status = 'pendente'))::integer AS pendente,
        (COUNT(a.id) FILTER (WHERE a.status = 'em_atendimento'))::integer AS em_atendimento,
-       (COUNT(a.id) FILTER (WHERE a.status = 'realizado'))::integer AS realizado
+       (COUNT(a.id) FILTER (WHERE a.status = 'realizado' AND a.finalizado_em >= CURRENT_DATE AND a.finalizado_em < CURRENT_DATE + INTERVAL '1 day'))::integer AS realizado
      FROM wb_setores s
      LEFT JOIN wb_atendimentos a
        ON a.setor_id = s.id AND a.arquivado = FALSE AND a.status = ANY($2::text[])

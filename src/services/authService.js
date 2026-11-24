@@ -2,6 +2,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 const usuarioRepository = require("../repositories/usuarioSistemaRepository");
+const permissaoService = require("./permissaoService");
 
 const TEMPO_TOKEN = "8h";
 
@@ -67,7 +68,16 @@ async function obterPerfil(id) {
     throw new Error("USUARIO_INATIVO");
   }
 
-  return usuario;
+  const permissoes =
+    await permissaoService.listarPermissoesUsuario(
+      usuario.id,
+      usuario.perfil
+    );
+
+  return {
+    ...usuario,
+    permissoes
+  };
 }
 
 async function trocarMinhaSenha(usuarioId, novaSenha) {

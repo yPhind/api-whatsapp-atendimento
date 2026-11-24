@@ -14,11 +14,22 @@ async function buscarPorLogin(login) {
 
 async function buscarPorId(id) {
   const resultado = await atendimento.query(
-    `SELECT id, nome, email, username, senha_hash, perfil, setor_id,
-            ativo, deve_redefinir_senha
-       FROM wb_usuarios_sistema WHERE id = $1 LIMIT 1`,
+    `SELECT
+       id,
+       nome,
+       email,
+       username,
+       perfil,
+       setor_id,
+       ativo,
+       deve_redefinir_senha,
+       criado_em
+     FROM wb_usuarios_sistema
+     WHERE id = $1
+     LIMIT 1`,
     [id]
   );
+
   return resultado.rows[0] || null;
 }
 

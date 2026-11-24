@@ -41,6 +41,7 @@ async function anexarDadosClientes(registros) {
   });
 }
 
+
 async function listarLogs(filtros = {}) {
   const condicoes = [];
   const parametros = [];
@@ -75,6 +76,7 @@ async function listarLogs(filtros = {}) {
     ? `WHERE ${condicoes.join(" AND ")}`
     : "";
 
+  // Busca os registros no banco de logs.
   const resultado = await logs.query(
     `
       SELECT
@@ -102,6 +104,16 @@ async function listarLogs(filtros = {}) {
     return registros;
   }
 
+  // IDs dos atendimentos vinculados aos logs.
+  const atendimentoIds = [
+    ...new Set(
+      registros
+        .map(registro => registro.atendimento_id)
+        .filter(id => id != null)
+        .map(String)
+    )
+  ];
+
   const usuariosSistemaIds = [
     ...new Set(
       registros
@@ -120,7 +132,22 @@ async function listarLogs(filtros = {}) {
     )
   ];
 
-  const [usuariosSistema, usuariosClientes] = await Promise.all([
+  // Consultas independentes aos bancos correspondentes.
+  const [
+    atendimentos,
+    usuariosSistema,
+    usuariosClientes
+  ] = await Promise.all([
+
+    atendimentoIds.length
+      ? atendimento.query(
+          `SELECT id, protocolo
+             FROM wb_atendimentos
+            WHERE id = ANY($1::bigint[])`,
+          [atendimentoIds]
+        )
+      : Promise.resolve({ rows: [] }),
+
     usuariosSistemaIds.length
       ? atendimento.query(
           `SELECT id, nome
@@ -140,6 +167,14 @@ async function listarLogs(filtros = {}) {
       : Promise.resolve({ rows: [] })
   ]);
 
+  // Mapas para relacionar os dados.
+  const mapaAtendimentos = new Map(
+    atendimentos.rows.map(item => [
+      String(item.id),
+      item.protocolo
+    ])
+  );
+
   const mapaUsuariosSistema = new Map(
     usuariosSistema.rows.map(usuario => [
       String(usuario.id),
@@ -154,16 +189,25 @@ async function listarLogs(filtros = {}) {
     ])
   );
 
+  // Retorna os logs com chamado e protocolo.
   return registros.map(registro => ({
     ...registro,
+
+    protocolo:
+      mapaAtendimentos.get(String(registro.atendimento_id)) || null,
+
     usuario_sistema_nome:
-      mapaUsuariosSistema.get(String(registro.usuario_sistema_id)) || null,
+      mapaUsuariosSistema.get(
+        String(registro.usuario_sistema_id)
+      ) || null,
+
     cliente_nome:
       mapaUsuariosClientes.get(
         String(registro.contexto?.usuario_cliente_id)
       ) || null
   }));
 }
+
 
 async function listarHistoricoAtendimentos(filtros = {}) {
   const condicoes = ["(a.status = 'realizado' OR a.arquivado = TRUE)"];

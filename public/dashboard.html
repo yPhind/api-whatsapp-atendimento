@@ -116,8 +116,13 @@
         <div class="inicio-graficos-grid">
           <article class="inicio-grafico-card inicio-grafico-setores">
             <div class="inicio-grafico-cabecalho">
-              <h3>Atendimentos por setor e status</h3>
-              <p>Quantidade atual em cada setor.</p>
+              <div class="inicio-grafico-cabecalho-texto">
+                <h3>Atendimentos por setor e status</h3>
+                <p>Quantidade atual em cada setor.</p>
+              </div>
+              <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="grafico-atendimentos-setor" aria-label="Ampliar gráfico de atendimentos por setor" title="Ampliar gráfico">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+              </button>
             </div>
             <div id="grafico-atendimentos-setor" class="inicio-grafico-area" role="img"
               aria-label="Gráfico de barras de atendimentos por setor e status">
@@ -126,8 +131,13 @@
           </article>
           <article class="inicio-grafico-card inicio-grafico-status">
             <div class="inicio-grafico-cabecalho">
-              <h3>Distribuição por status</h3>
-              <p>Participação de cada status no total atual.</p>
+              <div class="inicio-grafico-cabecalho-texto">
+                <h3>Distribuição por status</h3>
+                <p>Participação de cada status no total atual.</p>
+              </div>
+              <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="grafico-distribuicao-status" aria-label="Ampliar gráfico de distribuição por status" title="Ampliar gráfico">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+              </button>
             </div>
             <div id="grafico-distribuicao-status" class="inicio-grafico-area" role="img"
               aria-label="Gráfico de distribuição dos atendimentos por status">
@@ -138,9 +148,14 @@
 
         <article class="inicio-grafico-card inicio-grafico-mensal-card">
           <div class="inicio-grafico-cabecalho">
-            <h3>Volume mensal por setor</h3>
-            <p>Últimos 12 meses, separados por status. Os atendimentos em andamento são agrupados pelo mês de abertura;
-              os realizados, pelo mês de finalização.</p>
+            <div class="inicio-grafico-cabecalho-texto">
+              <h3>Volume mensal por setor</h3>
+              <p>Últimos 12 meses, separados por status. Os atendimentos em andamento são agrupados pelo mês de abertura;
+                os realizados, pelo mês de finalização.</p>
+            </div>
+            <button type="button" class="botao-ampliar-campo" data-ampliar-grafico="graficos-mensais-setor" aria-label="Ampliar gráfico mensal por setor" title="Ampliar gráfico">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>
+            </button>
           </div>
           <div id="graficos-mensais-setor" class="inicio-graficos-mensais">
             <p class="inicio-carregando">Carregando histórico mensal...</p>
@@ -378,8 +393,7 @@
         </div>
 
         <div class="filtros-tabela filtros-historico" id="historico-filtros">
-          <label>Chamado #<input type="search" data-filtro-historico="id" placeholder="Número"></label>
-          <label>Protocolo<input type="search" data-filtro-historico="protocolo" placeholder="Protocolo"></label>
+          <label class="filtro-historico-atendimento">Atendimento e protocolo<input type="search" data-filtro-historico="atendimento" placeholder="Nº do chamado ou protocolo" aria-label="Filtrar pelo número do chamado ou protocolo"></label>
           <label>Cliente<input type="search" data-filtro-historico="cliente" placeholder="Nome do cliente"></label>
           <label>Analista<input type="search" data-filtro-historico="analista" placeholder="Nome do analista"></label>
           <label>Setor<input type="search" data-filtro-historico="setor" placeholder="Setor"></label>
@@ -618,6 +632,13 @@
 
         <label for="tarefa-data">Data prevista (opcional)</label>
         <input id="tarefa-data" name="dataPrevista" type="date">
+        <label for="tarefa-severidade">Severidade</label>
+        <select id="tarefa-severidade" name="severidade">
+          <option value="normal">Normal</option>
+          <option value="moderada">Moderada</option>
+          <option value="urgente">Urgente</option>
+          <option value="grave">Grave</option>
+        </select>
         <label for="tarefa-anexos">Anexos (PDF, JPG, JPEG ou PNG; até 50 MB por arquivo)</label>
         <input id="tarefa-anexos" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
           multiple>
@@ -636,6 +657,8 @@
       <button type="button" id="fechar-detalhe-tarefa" class="modal-fechar" aria-label="Fechar">×</button>
       <h2 id="detalhe-tarefa-titulo"></h2>
       <p id="detalhe-tarefa-criador" hidden></p>
+      <p id="detalhe-tarefa-inicio" class="tarefa-data"></p>
+      <p id="detalhe-tarefa-severidade" class="tarefa-data"></p>
       <p id="detalhe-tarefa-empresa" class="tarefa-data"></p>
       <p id="detalhe-tarefa-observacao" class="detalhe-tarefa-observacao"></p>
       <p id="detalhe-tarefa-data" class="tarefa-data"></p>

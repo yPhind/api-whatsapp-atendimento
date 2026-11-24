@@ -676,9 +676,9 @@ async function replicarAtendimento({
   }
 
   const novo = await abrirAtendimento({
-    nome: origem.usuario_nome,
+    nome: nomeLimpo,
     telefone: origem.usuario_telefone,
-    whatsappId: origem.usuario_telefone,
+    whatsappId: origem.usuario_whatsapp_id || origem.usuario_telefone,
     setorId: Number(setorId),
     empresaId: Number(origem.empresa_id),
     descricao: String(descricao || "").trim() || origem.descricao,

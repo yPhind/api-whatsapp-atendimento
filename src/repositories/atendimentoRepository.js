@@ -168,9 +168,9 @@ async function buscarAbertoPorTelefone(telefone) {
 
 async function listarFila(setorId = null) {
   const resultado = await atendimento.query(
-    `SELECT a.id, a.usuario_id, a.empresa_id, a.protocolo, a.descricao,
-            a.atendimento_origem_id, a.status, a.criado_em,
-            s.nome AS setor_nome, a.setor_id
+    `SELECT a.id, a.usuario_id, a.usuario_nome, a.empresa_id, a.protocolo, a.descricao,
+        a.atendimento_origem_id, a.status, a.criado_em,
+        s.nome AS setor_nome, a.setor_id
        FROM wb_atendimentos a
        JOIN wb_setores s ON s.id = a.setor_id
       WHERE ($1::integer IS NULL OR a.setor_id = $1)

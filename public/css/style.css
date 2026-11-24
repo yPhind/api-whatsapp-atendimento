@@ -3364,3 +3364,475 @@ button:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+
+/* CORREÇÃO DEFINITIVA: usar a classe real fila-ampla aplicada pelo carregamento da Fila. */
+/* O chat possui display:flex próprio; o atributo hidden precisa ser respeitado com prioridade. */
+.atendimento-layout.fila-ampla {
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.atendimento-layout.fila-ampla > #chat-section[hidden],
+.atendimento-layout.fila-ampla > .chat-section[hidden] {
+  display: none !important;
+}
+
+.atendimento-layout.fila-ampla > #ticket-list,
+.atendimento-layout.fila-ampla > .ticket-list-fila {
+  display: flex !important;
+  flex-direction: column;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 0 !important;
+  box-sizing: border-box;
+}
+
+.atendimento-layout.fila-ampla.ticket-list-por-setor,
+.atendimento-layout.fila-ampla > .ticket-list-por-setor {
+  display: flex !important;
+  flex-direction: column;
+  width: 100% !important;
+  gap: 16px;
+}
+
+.atendimento-layout.fila-ampla .ticket-setor-grupo {
+  display: block;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  box-sizing: border-box;
+}
+
+.atendimento-layout.fila-ampla .ticket-status-lista {
+  display: grid !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)) !important;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.atendimento-layout.fila-ampla .fila-linha-chamado {
+  display: grid !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center;
+  gap: 18px;
+  box-sizing: border-box;
+}
+
+.atendimento-layout.fila-ampla .fila-conteudo,
+.atendimento-layout.fila-ampla .fila-cabecalho,
+.atendimento-layout.fila-ampla .fila-detalhes {
+  min-width: 0 !important;
+  width: 100%;
+}
+
+.atendimento-layout.fila-ampla .fila-cliente {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.atendimento-layout.fila-ampla .fila-detalhes p {
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.atendimento-layout.fila-ampla .fila-acoes {
+  min-width: max-content;
+  justify-content: flex-end;
+}
+
+@media (max-width: 760px) {
+  .atendimento-layout.fila-ampla .ticket-status-lista {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .atendimento-layout.fila-ampla .fila-linha-chamado {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .atendimento-layout.fila-ampla .fila-acoes {
+    min-width: 0;
+    justify-content: flex-start;
+  }
+}
+
+
+/* Fila de atendimentos — linha horizontal no padrão da referência visual. */
+.atendimento-layout.fila-ampla .ticket-setor-grupo {
+  padding: 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.atendimento-layout.fila-ampla .ticket-setor-titulo {
+  margin: 0 0 10px;
+  padding: 0 0 9px;
+  border-bottom: 1px solid #dbe4ef;
+  color: #172554;
+  font-size: 14px;
+}
+
+.atendimento-layout.fila-ampla .fila-linha-chamado {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: center;
+  gap: 14px;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 9px 12px !important;
+  border: 1px solid #dbe4ef;
+  border-left: 4px solid #647fe0;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  box-sizing: border-box;
+}
+
+.atendimento-layout.fila-ampla .fila-conteudo {
+  display: flex !important;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px 16px;
+  width: 100%;
+  min-width: 0;
+}
+
+.atendimento-layout.fila-ampla .fila-conteudo > * {
+  margin: 0 !important;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.atendimento-layout.fila-ampla .fila-cliente {
+  flex: 1 1 135px;
+  min-width: 115px;
+  color: #172554;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.atendimento-layout.fila-ampla .fila-setor,
+.atendimento-layout.fila-ampla .fila-analista,
+.atendimento-layout.fila-ampla .ticket-vinculo-origem {
+  flex: 0 1 auto;
+  color: #64748b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.atendimento-layout.fila-ampla .fila-descricao {
+  flex: 1 1 120px;
+  color: #334155;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.atendimento-layout.fila-ampla .fila-data {
+  flex: 0 1 145px;
+  color: #64748b;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.atendimento-layout.fila-ampla .fila-numero {
+  flex: 0 0 auto;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.atendimento-layout.fila-ampla .fila-conteudo .ticket-status-badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.atendimento-layout.fila-ampla .fila-acoes {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.atendimento-layout.fila-ampla .fila-acoes > button,
+.atendimento-layout.fila-ampla .fila-acoes .ticket-rotinas > summary {
+  min-height: 38px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.atendimento-layout.fila-ampla .fila-acoes .ticket-rotinas {
+  min-width: 118px;
+  margin: 0;
+}
+
+@media (max-width: 1250px) {
+  .atendimento-layout.fila-ampla .fila-linha-chamado {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px;
+  }
+
+  .atendimento-layout.fila-ampla .fila-conteudo {
+    flex-wrap: wrap;
+  }
+
+  .atendimento-layout.fila-ampla .fila-acoes {
+    justify-content: flex-end;
+    padding-top: 7px;
+    border-top: 1px solid #edf1f5;
+  }
+}
+
+@media (max-width: 760px) {
+  .atendimento-layout.fila-ampla .fila-conteudo {
+    align-items: flex-start;
+    gap: 7px 12px;
+  }
+
+  .atendimento-layout.fila-ampla .fila-cliente,
+  .atendimento-layout.fila-ampla .fila-descricao {
+    flex-basis: 100%;
+  }
+
+  .atendimento-layout.fila-ampla .fila-setor,
+  .atendimento-layout.fila-ampla .fila-analista,
+  .atendimento-layout.fila-ampla .ticket-vinculo-origem,
+  .atendimento-layout.fila-ampla .fila-data {
+    white-space: normal;
+  }
+
+  .atendimento-layout.fila-ampla .fila-acoes {
+    justify-content: flex-start;
+  }
+}
+
+
+/* Botões de ampliação com lupa */
+.inicio-grafico-cabecalho {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.inicio-grafico-cabecalho-texto {
+  min-width: 0;
+  flex: 1;
+}
+
+.botao-ampliar-campo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .15s ease;
+}
+
+.botao-ampliar-campo:hover {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.botao-ampliar-campo svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.botao-ampliar-log {
+  width: 32px;
+  height: 32px;
+  padding: 6px;
+}
+
+.analistas-tabela td:last-child,
+.analistas-tabela th:last-child {
+  width: 76px;
+  text-align: center;
+}
+
+.analistas-tabela tr.log-linha-selecionada {
+  outline: 2px solid #93c5fd;
+  outline-offset: -2px;
+  background: #eff6ff;
+}
+
+/* Janela ampliada reutilizada por gráficos e detalhes de logs */
+.modal-ampliacao-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background: rgba(15, 23, 42, .68);
+}
+
+.modal-ampliacao {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 96vw);
+  max-height: 92vh;
+  overflow: hidden;
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .28);
+}
+
+.modal-ampliacao-cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-ampliacao-cabecalho h2 {
+  margin: 0;
+  color: #172554;
+  font-size: 18px;
+}
+
+.modal-ampliacao-fechar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 26px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.modal-ampliacao-corpo {
+  min-height: 0;
+  overflow: auto;
+  padding: 20px;
+}
+
+.modal-ampliacao-grafico {
+  width: min(1400px, 98vw);
+  height: min(900px, 94vh);
+}
+
+.modal-ampliacao-grafico .modal-ampliacao-corpo {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.modal-ampliacao-grafico .grafico-ampliado-conteudo {
+  width: 100%;
+  min-height: 420px;
+  height: 100%;
+  overflow: auto;
+}
+
+.modal-ampliacao-grafico .grafico-ampliado-conteudo svg,
+.modal-ampliacao-grafico .grafico-ampliado-conteudo canvas {
+  max-width: 100%;
+}
+
+.modal-ampliacao-log {
+  width: min(850px, 96vw);
+}
+
+.log-detalhes-ampliados {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+}
+
+.log-detalhes-ampliados dt,
+.log-detalhes-ampliados dd {
+  margin: 0;
+  padding: 12px 10px;
+  border-bottom: 1px solid #e2e8f0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.log-detalhes-ampliados dt {
+  color: #475569;
+  font-weight: 700;
+  background: #f8fafc;
+}
+
+.log-detalhes-ampliados dd {
+  color: #1e293b;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 640px) {
+  .modal-ampliacao-overlay { padding: 8px; }
+  .modal-ampliacao { width: 100%; max-height: 96vh; }
+  .modal-ampliacao-cabecalho,
+  .modal-ampliacao-corpo { padding: 13px; }
+  .log-detalhes-ampliados {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .log-detalhes-ampliados dt {
+    padding-bottom: 4px;
+    border-bottom: 0;
+  }
+  .log-detalhes-ampliados dd {
+    padding-top: 4px;
+  }
+}
+
+
+/* Severidade das tarefas */
+.tarefa-severidade {
+  display: inline-flex; align-items: center; width: fit-content;
+  padding: 4px 9px; border-radius: 999px; font-size: .78rem;
+  font-weight: 700; background: #f1f5f9; color: #334155;
+}
+.tarefa-severidade-normal { background: #f1f5f9; color: #475569; }
+.tarefa-severidade-moderada { background: #fef3c7; color: #92400e; }
+.tarefa-severidade-urgente { background: #ffedd5; color: #9a3412; }
+.tarefa-severidade-grave { background: #fee2e2; color: #991b1b; }
+.modal-tarefa select {
+  width: 100%; box-sizing: border-box; padding: 10px 12px;
+  border: 1px solid #cbd5e1; border-radius: 7px; font: inherit;
+}

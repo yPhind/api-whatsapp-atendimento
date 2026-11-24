@@ -10,6 +10,7 @@ const whatsappWebhookRoutes = require('./routes/whatsappWebhookRoutes');
 const relatorioRoutes = require('./routes/relatorioRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
 const tarefaRoutes = require('./routes/tarefaRoutes');
+const permissaoRoutes = require('./routes/permissaoRoutes');
 
 
 const app = express();
@@ -49,6 +50,7 @@ app.use('/webhooks/whatsapp', whatsappWebhookRoutes);
 app.use("/api/relatorios", relatorioRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/tarefas", tarefaRoutes);
+app.use("/api/permissoes", permissaoRoutes);
 
 app.use((error, req, res, next) => {
   console.error('Erro na API:', error.message);

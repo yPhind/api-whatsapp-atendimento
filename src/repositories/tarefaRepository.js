@@ -64,6 +64,7 @@ async function listarPorUsuario(
        t.titulo,
        t.observacao,
        t.data_prevista,
+       t.severidade,
        t.status,
        t.criado_em,
        t.atualizado_em,
@@ -96,7 +97,8 @@ async function criar({
   empresaId,
   titulo,
   observacao,
-  dataPrevista
+  dataPrevista,
+  severidade = "normal"
 }) {
   const id = validarId(usuarioId, "USUARIO_ID");
 
@@ -107,16 +109,18 @@ async function criar({
        titulo,
        observacao,
        data_prevista,
+       severidade,
        status
      )
-     VALUES ($1, $2, $3, $4, $5, 'em_digitacao')
+     VALUES ($1, $2, $3, $4, $5, $6, 'em_digitacao')
      RETURNING *`,
     [
       id,
       empresaId || null,
       titulo,
       observacao,
-      dataPrevista || null
+      dataPrevista || null,
+      severidade
     ]
   );
 
@@ -145,7 +149,8 @@ async function atualizar({
   empresaId,
   titulo,
   observacao,
-  dataPrevista
+  dataPrevista,
+  severidade = "normal"
 }) {
   const tarefaId = validarId(id, "TAREFA_ID");
   const usuario = validarId(usuarioId, "USUARIO_ID");
@@ -156,6 +161,7 @@ async function atualizar({
             titulo = $4,
             observacao = $5,
             data_prevista = $6,
+            severidade = $7,
             atualizado_em = CURRENT_TIMESTAMP
       WHERE id = $1
         AND usuario_id = $2
@@ -167,7 +173,8 @@ async function atualizar({
       empresaId || null,
       titulo,
       observacao,
-      dataPrevista || null
+      dataPrevista || null,
+      severidade
     ]
   );
 
@@ -336,6 +343,7 @@ async function listarParaImpressao(ids, usuarioId, ehSupervisor = false) {
        titulo,
        observacao,
        data_prevista,
+       severidade,
        status,
        criado_em
      FROM wb_tarefas

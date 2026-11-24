@@ -26,6 +26,8 @@ function validar(body = {}) {
   const titulo = String(body.titulo || "").trim();
   const observacao = String(body.observacao || "").trim();
   const dataPrevista = body.dataPrevista || null;
+  const severidade = String(body.severidade || "normal").toLowerCase();
+  const severidadesValidas = ["normal", "moderada", "urgente", "grave"];
 
   let empresaId = null;
 
@@ -45,10 +47,11 @@ function validar(body = {}) {
     !titulo ||
     titulo.length > 64 ||
     !observacao ||
-    !dataValida(dataPrevista)
+    !dataValida(dataPrevista) ||
+    !severidadesValidas.includes(severidade)
   ) {
     throw erroHttp(
-      "Confira o título, a observação e a data prevista."
+      "Confira o título, a observação, a data prevista e a severidade."
     );
   }
 
@@ -56,6 +59,7 @@ function validar(body = {}) {
     titulo,
     observacao,
     dataPrevista,
+    severidade,
     empresaId
   };
 }
@@ -238,6 +242,8 @@ async function imprimir(req, res, next) {
         <div class="campo"><strong>Empresa vinculada</strong><div>${escaparHtml(tarefa.empresa?.razao_social || tarefa.empresa?.nome_fantasia || "Não vinculada")}</div></div>
         ${ehSupervisor ? `<div class="campo"><strong>Criada por</strong><div>${escaparHtml(tarefa.criador_nome || "Não identificado")}</div></div>` : ""}
         <div class="campo observacao"><strong>Observação</strong><div>${escaparHtml(tarefa.observacao).replace(/\r?\n/g, "<br>")}</div></div>
+        <div class="campo"><strong>Data de início</strong><div>${escaparHtml(formatarDataImpressao(tarefa.criado_em))}</div></div>
+        <div class="campo"><strong>Severidade</strong><div>${escaparHtml(tarefa.severidade || "normal")}</div></div>
         <div class="campo"><strong>Data prevista</strong><div>${escaparHtml(formatarDataImpressao(tarefa.data_prevista))}</div></div>
         <footer>Documento ${indice + 1} de ${tarefasComDados.length} · Gerado em ${new Date().toLocaleString("pt-BR")}</footer>
       </section>

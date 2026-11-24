@@ -768,27 +768,25 @@ function renderizarChamados() {
     let acoesFila = null;
     if (estaNaFila) {
       const conteudoFila = criarElemento("div", "", "fila-conteudo");
-      const cabecalhoFila = criarElemento("div", "", "fila-cabecalho");
-      const detalhesFila = criarElemento("div", "", "fila-detalhes");
-      const identificacaoFila = criarElemento("div", "", "fila-identificacao");
-
-      identificacaoFila.append(numero, bolhaStatus);
-      cabecalhoFila.append(nome, identificacaoFila);
-
-      detalhesFila.append(setor, analista);
-      if (vinculoOrigem) detalhesFila.append(vinculoOrigem);
-      detalhesFila.append(descricao);
 
       const dataCriacao = chamado.criado_em || chamado.data_criacao || chamado.created_at;
+      let dataRecebimento = null;
       if (dataCriacao) {
         const data = new Date(dataCriacao);
         const textoData = Number.isNaN(data.getTime())
           ? String(dataCriacao)
           : data.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-        detalhesFila.append(criarElemento("p", `Recebido: ${textoData}`, "fila-data"));
+        dataRecebimento = criarElemento("p", `Recebido: ${textoData}`, "fila-data");
       }
 
-      conteudoFila.append(cabecalhoFila, detalhesFila);
+      // Ordem horizontal inspirada na referência enviada:
+      // cliente, setor, analista, origem, descrição, recebimento, número e status.
+      conteudoFila.append(nome, setor, analista);
+      if (vinculoOrigem) conteudoFila.append(vinculoOrigem);
+      conteudoFila.append(descricao);
+      if (dataRecebimento) conteudoFila.append(dataRecebimento);
+      conteudoFila.append(numero, bolhaStatus);
+
       card.append(conteudoFila);
       acoesFila = criarElemento("div", "", "fila-acoes");
     } else {
@@ -796,8 +794,9 @@ function renderizarChamados() {
       if (vinculoOrigem) card.append(vinculoOrigem);
     }
 
-    const perfilSupervisor = usuarioAtual?.perfil === "supervisor";
-    const perfilAnalista = usuarioAtual?.perfil === "analista";
+    const perfilAtual = String(usuarioAtual?.perfil || "").trim().toLowerCase();
+    const perfilSupervisor = perfilAtual === "supervisor";
+    const perfilAnalista = perfilAtual === "analista";
     const estaEmMeus = visualizacao === "meus";
     const atendimentoAtivo = statusNormalizado !== "realizado" && chamado.arquivado !== true;
 
@@ -811,27 +810,26 @@ function renderizarChamados() {
       lista.append(item);
     };
 
-    const criarMenuRotinas = (acoes) => {
+    const criarMenuRotinas = (acoes, destino = card) => {
       const rotinas = document.createElement("details");
       rotinas.className = "ticket-rotinas";
       const resumo = document.createElement("summary");
       resumo.textContent = "Rotinas";
-      const lista = document.createElement("div");
-      lista.className = "ticket-rotinas-lista";
+      resumo.setAttribute("aria-label", `Rotinas do atendimento ${chamado.id}`);
+      const lista = criarElemento("div", "", "ticket-rotinas-lista");
       rotinas.append(resumo, lista);
       acoes(lista);
-      if (lista.children.length) (estaNaFila ? acoesFila : card).append(rotinas);
+      if (lista.children.length) destino.append(rotinas);
     };
 
-    // Na fila, o supervisor pode assumir o atendimento e acessar as demais ações em Rotinas.
-    // O analista vê exclusivamente a ação de assumir atendimento.
-    if (estaNaFila && (perfilSupervisor || perfilAnalista)) {
-      const botaoAssumir = criarElemento("button", "Assumir atendimento", "primary-button ticket-assumir-atendimento");
-      botaoAssumir.type = "button";
-      botaoAssumir.addEventListener("click", async (event) => {
+    const criarBotaoAssumir = () => {
+      const botao = criarElemento("button", "Assumir atendimento", "primary-button ticket-assumir-atendimento");
+      botao.type = "button";
+      botao.setAttribute("aria-label", `Assumir atendimento ${chamado.id}`);
+      botao.addEventListener("click", async (event) => {
         event.stopPropagation();
-        botaoAssumir.disabled = true;
-        botaoAssumir.textContent = "Assumindo...";
+        botao.disabled = true;
+        botao.textContent = "Assumindo...";
         try {
           await API.post(`/api/atendimentos/${encodeURIComponent(chamado.id)}/assumir`, {});
           await carregarChamados();
@@ -839,62 +837,56 @@ function renderizarChamados() {
             await carregarConversa(chamado.id);
           }
         } catch (erro) {
-          alert(erro.message);
-          botaoAssumir.disabled = false;
-          botaoAssumir.textContent = "Assumir atendimento";
+          alert(erro.message || "Não foi possível assumir o atendimento.");
+          botao.disabled = false;
+          botao.textContent = "Assumir atendimento";
         }
       });
-      (estaNaFila ? acoesFila : card).append(botaoAssumir);
+      return botao;
+    };
+
+    // FILA:
+    // Analista: somente "Assumir atendimento".
+    // Supervisor: "Assumir atendimento" + "Rotinas" com as ações administrativas da fila.
+    if (estaNaFila) {
+      if (perfilAnalista || perfilSupervisor) {
+        acoesFila.append(criarBotaoAssumir());
+      }
 
       if (perfilSupervisor) {
         criarMenuRotinas((lista) => {
           adicionarBotaoRotina(lista, "Replicar atendimento", () => abrirModalReplicarAtendimento(chamado));
+          adicionarBotaoRotina(lista, "Editar atendimento", () => abrirModalEditarAtendimento(chamado));
+          adicionarBotaoRotina(lista, "Alterar setor", () => abrirRotinaAlterarSetor(chamado));
           adicionarBotaoRotina(lista, "Alterar analista", () => abrirRotinaAlterarAnalista(chamado));
-        });
+        }, acoesFila);
       }
     }
 
-    // Em Meus atendimentos, as ações variam conforme o perfil.
+    // MEUS ATENDIMENTOS:
+    // As ações são exibidas no menu Rotinas conforme o perfil e a responsabilidade pelo chamado.
     if (estaEmMeus && (perfilAnalista || perfilSupervisor)) {
       criarMenuRotinas((lista) => {
-        const podeReplicarAnalista = perfilAnalista &&
-          Number(chamado.analista_id) === Number(usuarioAtual.id) &&
-          atendimentoAtivo;
-        const podeReplicarSupervisor = perfilSupervisor && atendimentoAtivo;
+        const analistaResponsavel = perfilAnalista &&
+          Number(chamado.analista_id) === Number(usuarioAtual.id);
 
-        if (podeReplicarAnalista || podeReplicarSupervisor) {
+        if (atendimentoAtivo && (perfilSupervisor || analistaResponsavel)) {
           adicionarBotaoRotina(lista, "Replicar atendimento", () => abrirModalReplicarAtendimento(chamado));
-        }
-
-        const podeEditarAnalista = perfilAnalista &&
-          Number(chamado.analista_id) === Number(usuarioAtual.id) &&
-          atendimentoAtivo;
-        const podeEditarSupervisor = perfilSupervisor && atendimentoAtivo;
-        if (podeEditarAnalista || podeEditarSupervisor) {
           adicionarBotaoRotina(lista, "Editar atendimento", () => abrirModalEditarAtendimento(chamado));
         }
 
         if (perfilSupervisor) {
-          if (setoresDisponiveis.length) {
-            adicionarBotaoRotina(lista, "Alterar setor", () => abrirRotinaAlterarSetor(chamado));
-          }
+          adicionarBotaoRotina(lista, "Alterar setor", () => abrirRotinaAlterarSetor(chamado));
           adicionarBotaoRotina(lista, "Alterar analista", () => abrirRotinaAlterarAnalista(chamado));
         }
 
-        const podeAlterarStatusAnalista = perfilAnalista &&
-          Number(chamado.analista_id) === Number(usuarioAtual.id) &&
-          statusNormalizado !== "realizado";
-        if (perfilSupervisor || podeAlterarStatusAnalista) {
+        if (perfilSupervisor || (analistaResponsavel && statusNormalizado !== "realizado")) {
           adicionarBotaoRotina(lista, "Alterar status", () => abrirRotinaAlterarStatus(chamado));
         }
 
-        const podeDevolverAnalista = perfilAnalista &&
-          Number(chamado.analista_id) === Number(usuarioAtual.id) &&
-          statusNormalizado !== "realizado";
-        const podeDevolverSupervisor = perfilSupervisor &&
-          Boolean(chamado.analista_id) &&
-          statusNormalizado !== "realizado";
-        if (podeDevolverAnalista || podeDevolverSupervisor) {
+        const podeDevolver = statusNormalizado !== "realizado" &&
+          (perfilSupervisor ? Boolean(chamado.analista_id) : analistaResponsavel);
+        if (podeDevolver) {
           adicionarBotaoRotina(lista, "Devolver à fila", async () => {
             if (!confirm(`Deseja devolver o atendimento #${chamado.id} para a fila do setor ${chamado.setor_nome || "atual"}?`)) return;
             await API.post(`/api/atendimentos/${encodeURIComponent(chamado.id)}/devolver-fila`);
@@ -1050,7 +1042,7 @@ document.querySelectorAll(".nav-button").forEach((botao) => {
 
 // Tarefas pessoais: acesso restrito ao usuário autenticado.
 const modalCriarTarefa = document.getElementById("modal-criar-tarefa"), formCriarTarefa = document.getElementById("form-criar-tarefa");
-const tarefasContainer = document.getElementById("tarefas-lista"), campoTituloTarefa = document.getElementById("tarefa-titulo"), campoObservacaoTarefa = document.getElementById("tarefa-observacao"), campoDataTarefa = document.getElementById("tarefa-data"), mensagemTarefa = document.getElementById("tarefa-mensagem");
+const tarefasContainer = document.getElementById("tarefas-lista"), campoTituloTarefa = document.getElementById("tarefa-titulo"), campoObservacaoTarefa = document.getElementById("tarefa-observacao"), campoDataTarefa = document.getElementById("tarefa-data"), campoSeveridadeTarefa = document.getElementById("tarefa-severidade"), mensagemTarefa = document.getElementById("tarefa-mensagem");
 const campoEmpresaTarefa = document.getElementById("tarefa-empresa");
 const filtroTarefaCliente = document.getElementById("filtro-tarefa-cliente");
 const filtroTarefaData = document.getElementById("filtro-tarefa-data");
@@ -1325,6 +1317,10 @@ async function carregarTarefas() {
       const meta = document.createElement("div");
       meta.className = "tarefa-meta-lista";
       meta.append(d);
+      const severidade = document.createElement("span");
+      severidade.className = `tarefa-severidade tarefa-severidade-${String(t.severidade || "normal").toLowerCase()}`;
+      severidade.textContent = `Severidade: ${({normal:"Normal",moderada:"Moderada",urgente:"Urgente",grave:"Grave"})[t.severidade || "normal"] || "Normal"}`;
+      meta.append(severidade);
 
       let empresa = null;
       if (t.empresa) {
@@ -1511,6 +1507,10 @@ function abrirDetalheTarefa(t) {
     }
   }
   document.getElementById("detalhe-tarefa-observacao").textContent = t.observacao;
+  const dataInicio = t.criado_em ? new Date(t.criado_em) : null;
+  document.getElementById("detalhe-tarefa-inicio").textContent = `Data de início: ${dataInicio && !Number.isNaN(dataInicio.getTime()) ? dataInicio.toLocaleString("pt-BR") : "Não disponível"}`;
+  const nomesSeveridade = { normal: "Normal", moderada: "Moderada", urgente: "Urgente", grave: "Grave" };
+  document.getElementById("detalhe-tarefa-severidade").textContent = `Severidade: ${nomesSeveridade[t.severidade || "normal"] || "Normal"}`;
   document.getElementById("detalhe-tarefa-data").textContent = `◷ ${formatarDataTarefa(t.data_prevista)}`;
   renderizarAnexosTarefa(t);
   prepararControlesImpressaoTarefas();
@@ -1524,6 +1524,7 @@ document.getElementById("fechar-detalhe-tarefa")?.addEventListener("click", () =
 async function abrirModalCriarTarefa(t = null) {
   tarefaEmEdicao = t?.id || null;
   formCriarTarefa.reset();
+  campoSeveridadeTarefa.value = t?.severidade || "normal";
   mensagemTarefa.textContent = "";
 
   document.getElementById("modal-tarefa-titulo").textContent =
@@ -1550,6 +1551,7 @@ async function abrirModalCriarTarefa(t = null) {
     campoEmpresaTarefa.value = t.empresa_id
       ? String(t.empresa_id)
       : "";
+    campoSeveridadeTarefa.value = t.severidade || "normal";
   }
 
   document.getElementById("tarefa-contador").textContent =
@@ -1573,7 +1575,8 @@ formCriarTarefa?.addEventListener("submit", async e => {
       titulo,
       observacao,
       dataPrevista: campoDataTarefa.value || null,
-      empresaId: campoEmpresaTarefa.value || null
+      empresaId: campoEmpresaTarefa.value || null,
+      severidade: campoSeveridadeTarefa.value || "normal"
     };
     let resultado;
     if (tarefaEmEdicao) resultado = await API.patch(`/api/tarefas/${tarefaEmEdicao}`, payload); else resultado = await API.post("/api/tarefas", payload);
@@ -2569,15 +2572,17 @@ async function carregarHistorico() {
     atendimentos.forEach((atendimento) => {
       const card = criarElemento("article", "", "ticket-card historico-ticket-compacto");
       const dataFinalizacao = atendimento.finalizado_em ? new Date(atendimento.finalizado_em) : null;
-      card.dataset.filtroId = String(atendimento.id || "").toLowerCase();
-      card.dataset.filtroProtocolo = String(atendimento.protocolo || "").toLowerCase();
+      // Um único campo de busca reúne o número do chamado e o protocolo.
+      card.dataset.filtroAtendimento = `#${atendimento.id || ""} ${atendimento.id || ""} ${atendimento.protocolo || ""}`.toLocaleLowerCase("pt-BR");
       card.dataset.filtroCliente = String(atendimento.usuario_nome || "").toLowerCase();
       card.dataset.filtroAnalista = String(atendimento.analista_nome || "").toLowerCase();
       card.dataset.filtroSetor = String(atendimento.setor_nome || "").toLowerCase();
       card.dataset.filtroData = dataFinalizacao && !Number.isNaN(dataFinalizacao.getTime()) ? `${dataFinalizacao.getFullYear()}-${String(dataFinalizacao.getMonth() + 1).padStart(2, "0")}-${String(dataFinalizacao.getDate()).padStart(2, "0")}` : "";
       const info = criarElemento("div", "", "historico-ticket-info");
+      const identificacao = criarElemento("h3", `#${atendimento.id} · ${atendimento.protocolo || "Sem protocolo"}`, "historico-identificacao-atendimento");
+      identificacao.title = `Chamado #${atendimento.id} | Protocolo ${atendimento.protocolo || "Não informado"}`;
       info.append(
-        criarElemento("h3", `#${atendimento.id} · ${atendimento.protocolo || "Sem protocolo"}`),
+        identificacao,
         criarElemento("p", `${atendimento.usuario_nome || "Cliente não informado"} · ${atendimento.setor_nome || "Sem setor"}`),
         criarElemento("p", `Responsável: ${atendimento.analista_nome || "Não atribuído"} · ${atendimento.arquivado ? "Arquivado" : "Realizado"} · ${Number(atendimento.total_mensagens || 0)} mensagens`)
       );
@@ -2693,6 +2698,66 @@ document.getElementById("historico-pagina-proxima")?.addEventListener("click", (
 
 fecharModalHistorico?.addEventListener("click", () => { modalHistorico.hidden = true; });
 
+
+function abrirModalAmpliacao(titulo, conteudo, classeExtra = "") {
+  const overlay = criarElemento("div", "", "modal-ampliacao-overlay");
+  const modal = criarElemento("section", "", `modal-ampliacao ${classeExtra}`.trim());
+  modal.setAttribute("role", "dialog");
+  modal.setAttribute("aria-modal", "true");
+  const cabecalho = criarElemento("header", "", "modal-ampliacao-cabecalho");
+  cabecalho.append(criarElemento("h2", titulo));
+  const fechar = criarElemento("button", "×", "modal-ampliacao-fechar");
+  fechar.type = "button";
+  fechar.setAttribute("aria-label", "Fechar janela ampliada");
+  fechar.addEventListener("click", () => overlay.remove());
+  cabecalho.append(fechar);
+  const corpo = criarElemento("div", "", "modal-ampliacao-corpo");
+  if (conteudo instanceof Node) corpo.append(conteudo);
+  else corpo.textContent = String(conteudo ?? "");
+  modal.append(cabecalho, corpo);
+  overlay.append(modal);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) overlay.remove();
+  });
+  document.addEventListener("keydown", function fecharEsc(event) {
+    if (event.key === "Escape" && overlay.isConnected) {
+      overlay.remove();
+      document.removeEventListener("keydown", fecharEsc);
+    }
+  });
+  document.body.append(overlay);
+  fechar.focus();
+  return overlay;
+}
+
+function ampliarGrafico(id) {
+  const original = document.getElementById(id);
+  if (!original) return;
+  const titulo = original.closest(".inicio-grafico-card")
+    ?.querySelector("h3")?.textContent || "Gráfico ampliado";
+  const copia = original.cloneNode(true);
+  copia.removeAttribute("id");
+  copia.classList.add("grafico-ampliado-conteudo");
+  abrirModalAmpliacao(titulo, copia, "modal-ampliacao-grafico");
+}
+
+document.addEventListener("click", (event) => {
+  const botao = event.target.closest("[data-ampliar-grafico]");
+  if (!botao) return;
+  ampliarGrafico(botao.dataset.ampliarGrafico);
+});
+
+function abrirDetalhesLog(dados) {
+  const conteudo = criarElemento("dl", "", "log-detalhes-ampliados");
+  dados.forEach(([rotulo, valor]) => {
+    conteudo.append(
+      criarElemento("dt", rotulo),
+      criarElemento("dd", valor || "Não informado")
+    );
+  });
+  abrirModalAmpliacao("Detalhes do registro de log", conteudo, "modal-ampliacao-log");
+}
+
 async function carregarLogs() {
   logsLista.replaceChildren(criarElemento("p", "Carregando logs do sistema..."));
 
@@ -2710,9 +2775,10 @@ async function carregarLogs() {
     const tabela = criarElemento("table", "", "analistas-tabela");
     const thead = document.createElement("thead");
     const linhaCabecalho = document.createElement("tr");
-    ["Data e hora", "Atd. e Protocolo", "Cliente", "Usuário responsável", "Ação", "Detalhes"].forEach(
+    ["Data e hora", "Atd. e Protocolo", "Cliente", "Usuário responsável", "Ação", "Detalhes", "Visualizar"].forEach(
       (texto) => linhaCabecalho.append(criarElemento("th", texto))
     );
+    linhaCabecalho.children[1]?.classList.add("log-coluna-atendimento");
     thead.append(linhaCabecalho);
     const linhaFiltros = document.createElement("tr");
     linhaFiltros.className = "filtros-logs-linha";
@@ -2740,8 +2806,13 @@ async function carregarLogs() {
           : `Filtrar coluna ${nomesColunas[indice]}`
       );
       input.dataset.filtroColunaLog = String(indice);
+      if (indice === 1) {
+        th.classList.add("log-coluna-atendimento");
+        input.classList.add("log-filtro-atendimento");
+      }
       th.append(input); linhaFiltros.append(th);
     });
+    linhaFiltros.append(document.createElement("th"));
     thead.append(linhaFiltros);
 
     const tbody = document.createElement("tbody");
@@ -2815,9 +2886,37 @@ async function carregarLogs() {
         responsavel,
         acao,
         detalhes
-      ].forEach((texto) => {
-        linha.append(criarElemento("td", texto));
+      ].forEach((texto, indice) => {
+        const celula = criarElemento("td", texto);
+        if (indice === 1) celula.classList.add("log-coluna-atendimento");
+        linha.append(celula);
       });
+
+      const celulaVisualizar = document.createElement("td");
+      const botaoVisualizar = criarElemento("button", "", "botao-ampliar-campo botao-ampliar-log");
+      botaoVisualizar.type = "button";
+      botaoVisualizar.title = "Ampliar informações deste registro";
+      botaoVisualizar.setAttribute("aria-label", "Ampliar informações deste registro");
+      botaoVisualizar.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 5 5"></path></svg>';
+      botaoVisualizar.addEventListener("click", (event) => {
+        event.stopPropagation();
+        tbody.querySelectorAll("tr.log-linha-selecionada").forEach((item) => item.classList.remove("log-linha-selecionada"));
+        linha.classList.add("log-linha-selecionada");
+        abrirDetalhesLog([
+          ["Data e hora", data],
+          ["Atendimento e protocolo", atendimento],
+          ["Cliente", cliente],
+          ["Usuário responsável", responsavel],
+          ["Ação", acao],
+          ["Detalhes", detalhes],
+          ["Evento técnico", registro.evento || "Não informado"],
+          ["Origem", registro.origem || "Não informada"],
+          ["Nível", registro.nivel || "Não informado"],
+          ["Contexto completo", formatarContexto(registro.contexto)]
+        ]);
+      });
+      celulaVisualizar.append(botaoVisualizar);
+      linha.append(celulaVisualizar);
 
       tbody.append(linha);
     });
