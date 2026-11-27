@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 const app = require("./app");
 const configurarSockets = require("./realtime/socketServer");
 const { encerrarPools } = require("./config/database");
+const { iniciarSincronizacao, pararSincronizacao } = require("./services/sync");
 
 const PORT = Number(process.env.PORT || 3000);
 
@@ -28,6 +29,9 @@ async function encerrarServidor(sinal) {
   if (encerrando) return;
 
   encerrando = true;
+
+  // Para a sincronização com o Firebird antes de fechar as conexões.
+  pararSincronizacao();
 
   console.log(
     `\n[SERVER] Sinal ${sinal} recebido. Encerrando aplicação...`
@@ -68,4 +72,9 @@ process.once("SIGTERM", () => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`[SERVER] Servidor rodando na porta ${PORT}`);
+
+  // SYNC_ENABLED=false no .env desliga a sincronização com o Firebird.
+  if (process.env.SYNC_ENABLED !== "false") {
+    iniciarSincronizacao();
+  }
 });
